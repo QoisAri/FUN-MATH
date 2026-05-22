@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -7,9 +8,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
+  --font-sans: "Nunito", system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-heading: "Nunito", system-ui, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -49,72 +50,118 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --background: oklch(0.98 0.005 250);
+  --foreground: oklch(0.2 0.02 260);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.2 0.02 260);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.2 0.02 260);
+  --primary: oklch(0.55 0.2 260);
+  --primary-foreground: oklch(0.98 0 0);
+  --secondary: oklch(0.95 0.01 250);
+  --secondary-foreground: oklch(0.25 0.02 260);
+  --muted: oklch(0.95 0.01 250);
+  --muted-foreground: oklch(0.5 0.02 260);
+  --accent: oklch(0.93 0.03 250);
+  --accent-foreground: oklch(0.25 0.02 260);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --border: oklch(0.9 0.01 250);
+  --input: oklch(0.9 0.01 250);
+  --ring: oklch(0.55 0.2 260);
+  --chart-1: oklch(0.65 0.2 260);
+  --chart-2: oklch(0.7 0.18 160);
+  --chart-3: oklch(0.65 0.2 300);
+  --chart-4: oklch(0.75 0.15 80);
+  --chart-5: oklch(0.6 0.2 30);
+  --radius: 0.75rem;
+  --sidebar: oklch(0.97 0.01 250);
+  --sidebar-foreground: oklch(0.2 0.02 260);
+  --sidebar-primary: oklch(0.55 0.2 260);
+  --sidebar-primary-foreground: oklch(0.98 0 0);
+  --sidebar-accent: oklch(0.93 0.03 250);
+  --sidebar-accent-foreground: oklch(0.25 0.02 260);
+  --sidebar-border: oklch(0.9 0.01 250);
+  --sidebar-ring: oklch(0.55 0.2 260);
+
+  /* ============================================
+     Custom Colors — FUN-MATH Edukatif
+     ============================================ */
+  /* InputBox state colors */
+  --input-idle-border: oklch(0.8 0.01 250);
+  --input-idle-bg: oklch(0.99 0 0);
+  --input-focused-border: oklch(0.6 0.18 260);
+  --input-focused-bg: oklch(0.95 0.04 260);
+  --input-correct-border: oklch(0.6 0.2 150);
+  --input-correct-bg: oklch(0.95 0.04 150);
+  --input-wrong-border: oklch(0.6 0.22 25);
+  --input-wrong-bg: oklch(0.95 0.04 25);
+  --input-hint-border: oklch(0.7 0.16 85);
+  --input-hint-bg: oklch(0.95 0.04 85);
+  --input-revealed-border: oklch(0.6 0.18 300);
+  --input-revealed-bg: oklch(0.95 0.04 300);
+
+  /* Carry/borrow indicator */
+  --carry-color: oklch(0.7 0.18 70);
+  --borrow-color: oklch(0.6 0.22 25);
+
+  /* Operation theme colors */
+  --op-addition: oklch(0.6 0.18 260);
+  --op-subtraction: oklch(0.6 0.18 160);
+  --op-multiplication: oklch(0.6 0.18 300);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --background: oklch(0.15 0.02 260);
+  --foreground: oklch(0.95 0.01 250);
+  --card: oklch(0.2 0.02 260);
+  --card-foreground: oklch(0.95 0.01 250);
+  --popover: oklch(0.2 0.02 260);
+  --popover-foreground: oklch(0.95 0.01 250);
+  --primary: oklch(0.7 0.18 260);
+  --primary-foreground: oklch(0.15 0 0);
+  --secondary: oklch(0.25 0.02 260);
+  --secondary-foreground: oklch(0.95 0.01 250);
+  --muted: oklch(0.25 0.02 260);
+  --muted-foreground: oklch(0.65 0.02 260);
+  --accent: oklch(0.25 0.03 260);
+  --accent-foreground: oklch(0.95 0.01 250);
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --ring: oklch(0.7 0.18 260);
+  --chart-1: oklch(0.7 0.18 260);
+  --chart-2: oklch(0.7 0.16 160);
+  --chart-3: oklch(0.7 0.18 300);
+  --chart-4: oklch(0.75 0.15 80);
+  --chart-5: oklch(0.65 0.2 30);
+  --sidebar: oklch(0.2 0.02 260);
+  --sidebar-foreground: oklch(0.95 0.01 250);
+  --sidebar-primary: oklch(0.7 0.18 260);
+  --sidebar-primary-foreground: oklch(0.15 0 0);
+  --sidebar-accent: oklch(0.25 0.03 260);
+  --sidebar-accent-foreground: oklch(0.95 0.01 250);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-ring: oklch(0.7 0.18 260);
+
+  --input-idle-border: oklch(0.4 0.02 260);
+  --input-idle-bg: oklch(0.2 0.01 260);
+  --input-focused-border: oklch(0.65 0.18 260);
+  --input-focused-bg: oklch(0.25 0.04 260);
+  --input-correct-border: oklch(0.65 0.18 150);
+  --input-correct-bg: oklch(0.25 0.04 150);
+  --input-wrong-border: oklch(0.65 0.2 25);
+  --input-wrong-bg: oklch(0.25 0.04 25);
+  --input-hint-border: oklch(0.7 0.16 85);
+  --input-hint-bg: oklch(0.25 0.04 85);
+  --input-revealed-border: oklch(0.65 0.18 300);
+  --input-revealed-bg: oklch(0.25 0.04 300);
+
+  --carry-color: oklch(0.75 0.16 70);
+  --borrow-color: oklch(0.65 0.2 25);
+
+  --op-addition: oklch(0.65 0.18 260);
+  --op-subtraction: oklch(0.65 0.18 160);
+  --op-multiplication: oklch(0.65 0.18 300);
 }
 
 @layer base {
@@ -126,5 +173,219 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+/* ============================================
+   Animasi — Feedback Visual
+   ============================================ */
+
+/* Shake — jawaban salah */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+  20%, 40%, 60%, 80% { transform: translateX(4px); }
+}
+
+/* Pulse — hint berkedip */
+@keyframes hint-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Bounce in — jawaban benar */
+@keyframes bounce-in {
+  0% { transform: scale(0.8); opacity: 0; }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Slide in dari bawah — carry indicator */
+@keyframes slide-in-up {
+  0% { transform: translateY(8px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+/* Fade in — generic */
+@keyframes fade-in {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* Glow pulse — kolom aktif */
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 oklch(0.6 0.18 260 / 0.3); }
+  50% { box-shadow: 0 0 0 6px oklch(0.6 0.18 260 / 0); }
+}
+
+/* Utility classes */
+.animate-shake {
+  animation: shake 0.5s ease-in-out;
+}
+
+.animate-hint-pulse {
+  animation: hint-pulse 1.2s ease-in-out infinite;
+}
+
+.animate-bounce-in {
+  animation: bounce-in 0.4s ease-out;
+}
+
+.animate-slide-in-up {
+  animation: slide-in-up 0.3s ease-out;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+/* ============================================
+   Reduced Motion — Aksesibilitas
+   ============================================ */
+@media (prefers-reduced-motion: reduce) {
+  .animate-shake,
+  .animate-hint-pulse,
+  .animate-bounce-in,
+  .animate-slide-in-up,
+  .animate-fade-in,
+  .animate-glow-pulse {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ============================================
+   MathBoard — Layout Grid Papan Hitung
+   ============================================ */
+.math-board {
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+  align-items: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.math-digit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3.5rem;
+  font-size: 1.75rem;
+  font-weight: 700;
+  border-radius: var(--radius-md);
+  position: relative;
+}
+
+.math-separator {
+  border-top: 3px solid var(--foreground);
+  width: 100%;
+  grid-column: 1 / -1;
+}
+
+/* ============================================
+   InputBox — Kotak Input Per Kolom
+   ============================================ */
+.input-box {
+  width: 3rem;
+  height: 3.5rem;
+  text-align: center;
+  font-size: 1.75rem;
+  font-weight: 700;
+  border: 2.5px solid var(--input-idle-border);
+  border-radius: var(--radius-md);
+  background: var(--input-idle-bg);
+  outline: none;
+  transition: all 0.2s ease;
+  caret-color: var(--primary);
+}
+
+.input-box:focus,
+.input-box--focused {
+  border-color: var(--input-focused-border);
+  background: var(--input-focused-bg);
+}
+
+.input-box--correct {
+  border-color: var(--input-correct-border);
+  background: var(--input-correct-bg);
+}
+
+.input-box--wrong {
+  border-color: var(--input-wrong-border);
+  background: var(--input-wrong-bg);
+}
+
+.input-box--hint {
+  border-color: var(--input-hint-border);
+  background: var(--input-hint-bg);
+}
+
+.input-box--revealed {
+  border-color: var(--input-revealed-border);
+  background: var(--input-revealed-bg);
+}
+
+/* ============================================
+   Carry/Borrow Indicator
+   ============================================ */
+.carry-indicator {
+  position: absolute;
+  top: -0.75rem;
+  left: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--carry-color);
+  z-index: 10;
+}
+
+.borrow-indicator {
+  position: absolute;
+  top: -0.5rem;
+  right: 0;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--borrow-color);
+}
+
+/* Coret visual untuk borrow */
+.borrow-strikethrough {
+  text-decoration: line-through;
+  text-decoration-color: var(--borrow-color);
+  text-decoration-thickness: 2px;
+  opacity: 0.5;
+}
+
+/* ============================================
+   Offset Indicator — Perkalian
+   ============================================ */
+.offset-placeholder {
+  width: 3rem;
+  height: 3.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: oklch(0.7 0.02 250);
+  font-size: 1.5rem;
+}
+
+/* ============================================
+   Responsive — Mobile First (≥ 375px)
+   ============================================ */
+@media (max-width: 400px) {
+  .math-digit,
+  .input-box {
+    width: 2.5rem;
+    height: 3rem;
+    font-size: 1.4rem;
+  }
+
+  .offset-placeholder {
+    width: 2.5rem;
+    height: 3rem;
   }
 }
