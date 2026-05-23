@@ -12,8 +12,8 @@ import { createClient } from '@/lib/supabase/client';
 
 const NAV_ITEMS = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/dashboard?tab=siswa', icon: Users, label: 'Siswa' },
-  { href: '/dashboard?tab=soal', icon: BookOpen, label: 'Soal' },
+  { href: '/siswa', icon: Users, label: 'Siswa' },
+  { href: '/soal', icon: BookOpen, label: 'Soal' },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -49,8 +49,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         {/* Nav items — sekarang memiliki href unik */}
         {NAV_ITEMS.map((item) => {
-          const isActive = pathname + (typeof window !== 'undefined' ? window.location.search : '') === item.href
-            || (item.href === '/dashboard' && pathname === '/dashboard');
+          const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
           return (
             <Button
               key={item.label}
