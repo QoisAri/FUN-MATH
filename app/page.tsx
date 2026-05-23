@@ -286,17 +286,16 @@ export default function LandingPage() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.5 }}
-        className="absolute bottom-4 right-4"
+        className="absolute bottom-8 flex justify-center w-full"
       >
-        <Button
-          variant="ghost"
-          size="sm"
+        <button
           onClick={() => router.push('/login')}
-          className="text-xs text-muted-foreground gap-1 opacity-60 hover:opacity-100"
+          className="group relative flex items-center gap-2 text-sm md:text-base font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-500 via-violet-500 to-emerald-500 cursor-pointer hover:opacity-80 transition-opacity"
         >
-          <GraduationCap className="w-3.5 h-3.5" />
-          Guru
-        </Button>
+          <GraduationCap className="w-5 h-5 text-violet-500" />
+          kamu guru? pencet sini
+          <div className="absolute -bottom-1 left-0 w-full h-[2px] bg-gradient-to-r from-blue-500 via-violet-500 to-emerald-500 opacity-50 group-hover:opacity-100 transition-opacity" />
+        </button>
       </motion.div>
     </div>
   );
