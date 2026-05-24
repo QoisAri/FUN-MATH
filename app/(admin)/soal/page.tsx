@@ -6,11 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { createClient } from '@/lib/supabase/client';
+import { toast } from "sonner";
 import type { SoalDB as Soal } from '@/lib/supabase/types';
 
 export default function KelolaSoalPage() {
@@ -20,6 +22,7 @@ export default function KelolaSoalPage() {
   // Modal State
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editSoal, setEditSoal] = useState<Soal | null>(null);
+  const [soalToDelete, setSoalToDelete] = useState<string | null>(null);
   
   // Form State
   const [operasi, setOperasi] = useState('penjumlahan');
@@ -69,7 +72,10 @@ export default function KelolaSoalPage() {
   };
 
   const handleSave = async () => {
-    if (angka1 === '' || angka2 === '') return alert('Angka 1 dan Angka 2 wajib diisi!');
+    if (angka1 === '' || angka2 === '') {
+      toast.error('Angka 1 dan Angka 2 wajib diisi!');
+      return;
+    }
     
     setIsSaving(true);
     try {
@@ -87,21 +93,25 @@ export default function KelolaSoalPage() {
       
       await fetchSoal();
       closeDialog();
+      toast.success(`Soal berhasil ${editSoal ? 'diperbarui' : 'ditambahkan'}!`);
     } catch (err: any) {
-      alert('Gagal menyimpan data: ' + err.message);
+      toast.error('Gagal menyimpan data: ' + err.message);
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Yakin ingin menghapus soal ini?')) return;
+  const handleDeleteConfirm = async () => {
+    if (!soalToDelete) return;
     try {
-      const { error } = await supabase.from('soal').delete().eq('id', id);
+      const { error } = await supabase.from('soal').delete().eq('id', soalToDelete);
       if (error) throw error;
       await fetchSoal();
+      toast.success('Soal berhasil dihapus!');
     } catch (err: any) {
-      alert('Gagal menghapus data: ' + err.message);
+      toast.error('Gagal menghapus data: ' + err.message);
+    } finally {
+      setSoalToDelete(null);
     }
   };
 
@@ -257,7 +267,7 @@ export default function KelolaSoalPage() {
                       <Button variant="ghost" size="icon" onClick={() => openDialog(s)}>
                         <Pencil className="w-4 h-4 text-muted-foreground" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(s.id)}>
+                      <Button variant="ghost" size="icon" onClick={() => setSoalToDelete(s.id)}>
                         <Trash2 className="w-4 h-4 text-red-500" />
                       </Button>
                     </TableCell>
@@ -268,6 +278,23 @@ export default function KelolaSoalPage() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!soalToDelete} onOpenChange={(open) => !open && setSoalToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hapus Soal</AlertDialogTitle>
+            <AlertDialogDescription>
+              Yakin ingin menghapus soal ini? Tindakan ini tidak dapat dibatalkan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700 text-white">
+              Hapus
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

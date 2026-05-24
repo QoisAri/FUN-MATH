@@ -30,5 +30,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ valid: false, error: 'PIN salah' }, { status: 401 });
   }
 
-  return NextResponse.json({ valid: true });
+  // Set secure HttpOnly cookie untuk autentikasi siswa
+  const response = NextResponse.json({ valid: true });
+  response.cookies.set({
+    name: 'siswa_session',
+    value: siswa_id,
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 60 * 60 * 24 * 7, // 1 minggu
+  });
+
+  return response;
 }
