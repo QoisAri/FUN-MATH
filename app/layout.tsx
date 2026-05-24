@@ -27,6 +27,8 @@ export const metadata: Metadata = {
   ],
 };
 
+import { Toaster } from "@/components/ui/sonner";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -34,7 +36,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="id" className={`${nunito.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col font-sans">{children}</body>
+      <body className="min-h-full flex flex-col font-sans">
+        {children}
+        <Toaster richColors position="bottom-right" />
+      </body>
     </html>
   );
 }

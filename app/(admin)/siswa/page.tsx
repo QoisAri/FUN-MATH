@@ -8,9 +8,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { createClient } from '@/lib/supabase/client';
+import { toast } from "sonner";
 import type { Siswa } from '@/lib/supabase/types';
 
 export default function KelolaSiswaPage() {
@@ -20,6 +22,7 @@ export default function KelolaSiswaPage() {
   // Modal State
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editSiswa, setEditSiswa] = useState<Siswa | null>(null);
+  const [siswaToDelete, setSiswaToDelete] = useState<string | null>(null);
   
   // Form State
   const [nama, setNama] = useState('');
@@ -63,8 +66,14 @@ export default function KelolaSiswaPage() {
   };
 
   const handleSave = async () => {
-    if (!nama || !pin) return alert('Nama dan PIN wajib diisi!');
-    if (pin.length !== 4) return alert('PIN harus 4 digit angka!');
+    if (!nama || !pin) {
+      toast.error('Nama dan PIN wajib diisi!');
+      return;
+    }
+    if (pin.length !== 4) {
+      toast.error('PIN harus 4 digit angka!');
+      return;
+    }
     
     setIsSaving(true);
     try {
@@ -82,21 +91,25 @@ export default function KelolaSiswaPage() {
       
       await fetchSiswa();
       closeDialog();
+      toast.success(`Data siswa berhasil ${editSiswa ? 'diperbarui' : 'ditambahkan'}!`);
     } catch (err: any) {
-      alert('Gagal menyimpan data: ' + err.message);
+      toast.error('Gagal menyimpan data: ' + err.message);
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Yakin ingin menghapus siswa ini? Semua sesi latihannya mungkin akan terhapus juga.')) return;
+  const handleDeleteConfirm = async () => {
+    if (!siswaToDelete) return;
     try {
-      const { error } = await supabase.from('siswa').delete().eq('id', id);
+      const { error } = await supabase.from('siswa').delete().eq('id', siswaToDelete);
       if (error) throw error;
       await fetchSiswa();
+      toast.success('Data siswa berhasil dihapus!');
     } catch (err: any) {
-      alert('Gagal menghapus data: ' + err.message);
+      toast.error('Gagal menghapus data: ' + err.message);
+    } finally {
+      setSiswaToDelete(null);
     }
   };
 
@@ -205,7 +218,7 @@ export default function KelolaSiswaPage() {
                       <Button variant="ghost" size="icon" onClick={() => openDialog(s)}>
                         <Pencil className="w-4 h-4 text-muted-foreground" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(s.id)}>
+                      <Button variant="ghost" size="icon" onClick={() => setSiswaToDelete(s.id)}>
                         <Trash2 className="w-4 h-4 text-red-500" />
                       </Button>
                     </TableCell>
@@ -216,6 +229,23 @@ export default function KelolaSiswaPage() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!siswaToDelete} onOpenChange={(open) => !open && setSiswaToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hapus Data Siswa</AlertDialogTitle>
+            <AlertDialogDescription>
+              Yakin ingin menghapus siswa ini? Semua sesi latihan dan riwayat nilainya akan ikut terhapus. Tindakan ini tidak dapat dibatalkan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700 text-white">
+              Hapus
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -290,11 +290,11 @@ export default function LandingPage() {
       >
         <button
           onClick={() => router.push('/login')}
-          className="group relative flex items-center gap-2 text-sm md:text-base font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-500 via-violet-500 to-emerald-500 cursor-pointer hover:opacity-80 transition-opacity"
+          className="group relative flex items-center gap-2 text-sm md:text-base font-bold bg-clip-text text-transparent bg-linear-to-r from-blue-500 via-violet-500 to-emerald-500 cursor-pointer hover:opacity-80 transition-opacity"
         >
           <GraduationCap className="w-5 h-5 text-violet-500" />
           kamu guru? pencet sini
-          <div className="absolute -bottom-1 left-0 w-full h-[2px] bg-gradient-to-r from-blue-500 via-violet-500 to-emerald-500 opacity-50 group-hover:opacity-100 transition-opacity" />
+          <div className="absolute -bottom-1 left-0 w-full h-[2px] bg-linear-to-r from-blue-500 via-violet-500 to-emerald-500 opacity-50 group-hover:opacity-100 transition-opacity" />
         </button>
       </motion.div>
     </div>
