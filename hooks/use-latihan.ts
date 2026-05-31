@@ -25,6 +25,8 @@ interface UseLatihanReturn {
   state: LatihanState;
   /** State per kolom jawaban */
   jawabanState: JawabanKolomState[];
+  /** State per kolom simpanan (carry) */
+  carryJawabanState: JawabanKolomState[];
   /** Soal yang sedang dikerjakan */
   soalAktif: Soal | null;
   /** Index soal saat ini */
@@ -51,6 +53,8 @@ interface UseLatihanReturn {
   mulaiSesi: (daftarSoal: Soal[]) => void;
   /** Handle jawaban di kolom tertentu */
   isiJawaban: (kolom: number, nilai: number) => void;
+  /** Handle jawaban simpanan di kolom tertentu */
+  isiCarryJawaban: (kolom: number, nilai: number) => void;
   /** Lewati soal */
   lewatiSoal: () => void;
   /** Coba lagi kolom yang salah */
@@ -70,6 +74,7 @@ export function useLatihan(): UseLatihanReturn {
   const [daftarSoal, setDaftarSoal] = useState<Soal[]>([]);
   const [indexSoal, setIndexSoal] = useState(0);
   const [jawabanState, setJawabanState] = useState<JawabanKolomState[]>([]);
+  const [carryJawabanState, setCarryJawabanState] = useState<JawabanKolomState[]>([]);
   const [rekap, setRekap] = useState<RekapSoal[]>([]);
   const [feedbackPesan, setFeedbackPesan] = useState('');
   const [feedbackHint, setFeedbackHint] = useState('');
@@ -116,7 +121,13 @@ export function useLatihan(): UseLatihanReturn {
       state: 'idle' as InputBoxState,
       jumlahPercobaan: 0,
     }));
+    const carryJawaban: JawabanKolomState[] = digits.map(() => ({
+      nilai: null,
+      state: 'idle' as InputBoxState,
+      jumlahPercobaan: 0,
+    }));
     setJawabanState(jawaban);
+    setCarryJawabanState(carryJawaban);
     setFeedbackPesan('');
     setFeedbackHint('');
     setKolomSalah(null);
@@ -219,29 +230,79 @@ export function useLatihan(): UseLatihanReturn {
     }
   }, [perhitungan, state, digitsHasil, jawabanState, soalAktif, carryVisible, borrowVisible, waktuMulai]);
 
-  /** Coba lagi kolom yang salah */
-  const cobaLagi = useCallback(() => {
-    if (kolomSalah === null) return;
+  /** Handle jawaban siswa untuk simpanan (carry) */
+  const isiCarryJawaban = useCallback((kolom: number, nilai: number) => {
+    if (!perhitungan || state !== 'MENGERJAKAN') return;
 
-    setJawabanState((prev) => {
+    const expectedCarry = carryVisible.find((c) => c.kolom === kolom)?.carry;
+    if (expectedCarry === undefined) return;
+
+    const isBenar = validateColumn(nilai, expectedCarry);
+
+    setCarryJawabanState((prev) => {
       const updated = [...prev];
-      updated[kolomSalah] = {
-        ...updated[kolomSalah],
-        nilai: null,
-        state: 'hint',
-      };
+      if (!updated[kolom]) {
+        updated[kolom] = { nilai: null, state: 'idle', jumlahPercobaan: 0 };
+      }
+      const current = { ...updated[kolom] };
+      current.nilai = nilai;
+      current.jumlahPercobaan += 1;
+
+      if (isBenar) {
+        current.state = 'correct';
+      } else {
+        current.state = 'wrong';
+      }
+
+      updated[kolom] = current;
       return updated;
     });
+
+    if (!isBenar) {
+      setKolomSalah(kolom);
+      setState('WRONG');
+
+      const percobaan = (carryJawabanState[kolom]?.jumlahPercobaan ?? 0) + 1;
+
+      if (percobaan >= MAX_PERCOBAAN) {
+        setFeedbackPesan('Jawaban akan ditampilkan');
+        setFeedbackHint('');
+      } else {
+        setFeedbackPesan('Simpanan belum tepat, coba lagi!');
+        setFeedbackHint('Hitung kembali nilai simpanan di atas');
+      }
+    }
+  }, [perhitungan, state, carryVisible, carryJawabanState]);
+
+  /** Coba lagi kolom yang salah */
+  const cobaLagi = useCallback(() => {
+    setJawabanState((prev) => 
+      prev.map(j => j.state === 'wrong' ? { ...j, nilai: null, state: 'hint' } : j)
+    );
+    setCarryJawabanState((prev) => 
+      prev.map(c => c?.state === 'wrong' ? { ...c, nilai: null, state: 'hint' } : c)
+    );
 
     setState('MENGERJAKAN');
     setFeedbackPesan('');
 
     // Focus kembali ke kolom yang salah
     setTimeout(() => {
-      const input = document.getElementById(`input-kolom-${kolomSalah}`);
-      if (input) (input as HTMLInputElement).focus();
+      // Cari jika ada carry yang salah
+      const wrongCarryIdx = carryJawabanState.findIndex(c => c?.state === 'wrong');
+      if (wrongCarryIdx !== -1) {
+        const input = document.getElementById(`carry-kolom-${wrongCarryIdx}`);
+        if (input) (input as HTMLInputElement).focus();
+        return;
+      }
+      
+      const wrongIdx = jawabanState.findIndex(j => j.state === 'wrong');
+      if (wrongIdx !== -1) {
+        const input = document.getElementById(`input-kolom-${wrongIdx}`);
+        if (input) (input as HTMLInputElement).focus();
+      }
     }, 100);
-  }, [kolomSalah]);
+  }, [jawabanState, carryJawabanState]);
 
   /** Lihat cara penyelesaian (reveal semua) */
   const lihatCara = useCallback(() => {
@@ -251,6 +312,15 @@ export function useLatihan(): UseLatihanReturn {
         nilai: digitsHasil[i],
         state: 'revealed' as InputBoxState,
       }))
+    );
+    setCarryJawabanState((prev) =>
+      prev.map((c, i) => {
+        const expectedCarry = carryVisible.find(cv => cv.kolom === i)?.carry;
+        if (expectedCarry !== undefined) {
+          return { ...c, nilai: expectedCarry, state: 'revealed' as InputBoxState };
+        }
+        return c;
+      })
     );
     setState('REVEALED');
     setFeedbackPesan('');
@@ -304,6 +374,7 @@ export function useLatihan(): UseLatihanReturn {
   return {
     state,
     jawabanState,
+    carryJawabanState,
     soalAktif,
     indexSoal,
     totalSoal: daftarSoal.length,
@@ -317,6 +388,7 @@ export function useLatihan(): UseLatihanReturn {
     waktuDetik,
     mulaiSesi,
     isiJawaban,
+    isiCarryJawaban,
     lewatiSoal,
     cobaLagi,
     lihatCara,

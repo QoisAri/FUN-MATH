@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BookOpen, PenTool, ArrowLeft } from 'lucide-react';
+import { BookOpen, PenTool, ArrowLeft, ClipboardList } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import OperationCard from '@/components/math/operation-card';
 import type { Operasi, Kesulitan } from '@/types/math';
@@ -65,6 +65,25 @@ export default function PilihOperasiPage() {
             >
               Mau belajar apa? 🤔
             </motion.h2>
+
+            <motion.button
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => router.push('/tugas')}
+              className="flex items-center justify-between w-full max-w-sm p-4 bg-orange-50 border-2 border-orange-200 rounded-2xl hover:border-orange-400 shadow-sm hover:shadow-md transition-all group"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center group-hover:bg-orange-200 transition-colors">
+                  <ClipboardList className="w-6 h-6 text-orange-600" />
+                </div>
+                <div className="text-left">
+                  <h3 className="font-bold text-orange-800 text-lg">Tugas & PR</h3>
+                  <p className="text-sm text-orange-600/80 font-medium">Kerjakan tugas dari Guru</p>
+                </div>
+              </div>
+            </motion.button>
 
             <div className="flex flex-wrap justify-center gap-4">
               <OperationCard operasi="penjumlahan" onClick={handlePilihOperasi} delay={0.1} />

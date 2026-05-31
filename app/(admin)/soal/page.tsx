@@ -32,6 +32,21 @@ export default function KelolaSoalPage() {
   const [aktif, setAktif] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Filter State
+  const [filterOperasi, setFilterOperasi] = useState('semua');
+  const [filterKesulitan, setFilterKesulitan] = useState('semua');
+  const [filterStatus, setFilterStatus] = useState('semua');
+
+  const filteredSoalList = soalList.filter((s) => {
+    if (filterOperasi !== 'semua' && s.operasi !== filterOperasi) return false;
+    if (filterKesulitan !== 'semua' && s.kesulitan !== filterKesulitan) return false;
+    if (filterStatus !== 'semua') {
+      if (filterStatus === 'aktif' && !s.aktif) return false;
+      if (filterStatus === 'non-aktif' && s.aktif) return false;
+    }
+    return true;
+  });
+
   const supabase = createClient();
 
   const fetchSoal = async () => {
@@ -220,16 +235,53 @@ export default function KelolaSoalPage() {
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-4 pb-4">
           <CardTitle>Bank Soal</CardTitle>
+          <div className="flex flex-wrap gap-2">
+            <Select value={filterOperasi} onValueChange={setFilterOperasi}>
+              <SelectTrigger className="w-[150px]">
+                <SelectValue placeholder="Semua Operasi" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="semua">Semua Operasi</SelectItem>
+                <SelectItem value="penjumlahan">Penjumlahan</SelectItem>
+                <SelectItem value="pengurangan">Pengurangan</SelectItem>
+                <SelectItem value="perkalian">Perkalian</SelectItem>
+                <SelectItem value="pembagian">Pembagian</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={filterKesulitan} onValueChange={setFilterKesulitan}>
+              <SelectTrigger className="w-[150px]">
+                <SelectValue placeholder="Semua Kesulitan" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="semua">Semua Kesulitan</SelectItem>
+                <SelectItem value="mudah">Mudah</SelectItem>
+                <SelectItem value="sedang">Sedang</SelectItem>
+                <SelectItem value="sulit">Sulit</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Semua Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="semua">Semua Status</SelectItem>
+                <SelectItem value="aktif">Aktif</SelectItem>
+                <SelectItem value="non-aktif">Non-aktif</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardHeader>
         <CardContent>
           {loading ? (
              <div className="flex items-center justify-center py-8">
                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
              </div>
-          ) : soalList.length === 0 ? (
-             <div className="text-center py-8 text-muted-foreground">Belum ada data soal.</div>
+          ) : filteredSoalList.length === 0 ? (
+             <div className="text-center py-8 text-muted-foreground">Tidak ada data soal yang sesuai.</div>
           ) : (
             <Table>
               <TableHeader>
@@ -242,7 +294,7 @@ export default function KelolaSoalPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {soalList.map((s) => (
+                {filteredSoalList.map((s) => (
                   <TableRow key={s.id}>
                     <TableCell className="capitalize">{s.operasi}</TableCell>
                     <TableCell className="font-mono font-medium text-lg">

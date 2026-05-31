@@ -24,8 +24,12 @@ interface MathBoardProps {
   mode: MathBoardMode;
   /** Callback saat siswa mengisi jawaban di kolom tertentu */
   onJawaban?: (kolom: number, nilai: number) => void;
+  /** Callback saat siswa mengisi jawaban simpanan di kolom tertentu */
+  onCarryJawaban?: (kolom: number, nilai: number) => void;
   /** State per kolom jawaban (mode latihan) */
   jawabanState?: { nilai: number | null; state: InputBoxState }[];
+  /** State per kolom simpanan (mode latihan) */
+  carryJawabanState?: { nilai: number | null; state: InputBoxState }[];
   /** Langkah animasi yang aktif (mode animasi) */
   langkahAktif?: number;
   /** Carry values yang visible per kolom */
@@ -40,7 +44,9 @@ export default function MathBoard({
   operasi,
   mode,
   onJawaban,
+  onCarryJawaban,
   jawabanState,
+  carryJawabanState,
   langkahAktif,
   carryVisible = [],
   borrowVisible = [],
@@ -116,10 +122,28 @@ export default function MathBoard({
           const kolom = maxKolom - 1 - i;
           const carry = getCarryForKolom(kolom);
           const borrow = getBorrowForKolom(kolom);
+          const cState = carryJawabanState?.[kolom];
 
           return (
-            <div key={`indicator-${kolom}`} className="math-digit relative" style={{ height: '1.25rem' }}>
-              {carry && <CarryIndicator nilai={carry.carry} />}
+            <div key={`indicator-${kolom}`} className="math-digit relative flex justify-center items-end" style={{ height: '2rem' }}>
+              {carry && (
+                mode === 'latihan' ? (
+                  <div className="absolute bottom-0 scale-75 origin-bottom">
+                    <InputBox
+                      id={`carry-kolom-${kolom}`}
+                      state={cState?.state ?? 'idle'}
+                      nilai={cState?.nilai ?? null}
+                      onChange={(nilai) => onCarryJawaban?.(kolom, nilai)}
+                      onFocusNext={() => {
+                        const nextInput = document.getElementById(`input-kolom-${kolom}`);
+                        if (nextInput) (nextInput as HTMLInputElement).focus();
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <CarryIndicator nilai={carry.carry} />
+                )
+              )}
               {borrow && (
                 <BorrowIndicator
                   nilaiAsli={borrow.nilaiSebelum}
@@ -300,6 +324,18 @@ export default function MathBoard({
                       next < digitsHasil.length &&
                       jawabanState?.[next]?.state !== 'correct'
                     ) {
+                      // Cek apakah kolom berikutnya punya input simpanan yang belum diisi
+                      if (mode === 'latihan' && carryJawabanState) {
+                        const carry = getCarryForKolom(next);
+                        const cState = carryJawabanState[next];
+                        if (carry && cState?.state !== 'correct') {
+                          const carryInput = document.getElementById(`carry-kolom-${next}`);
+                          if (carryInput) {
+                            (carryInput as HTMLInputElement).focus();
+                            return;
+                          }
+                        }
+                      }
                       focusKolom(next);
                       return;
                     }
