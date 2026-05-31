@@ -1,15 +1,14 @@
 'use client';
 
 // ============================================
-// Halaman Latihan — Sesi Latihan Interaktif
+// Halaman Kerjakan Tugas — Sesi Latihan dari Admin
 // ============================================
 // MathBoard mode 'latihan' + state machine useLatihan.
-// Validasi real-time per kolom, hint system, feedback overlay.
-// Timer per soal. Simpan ke DB setelah sesi selesai.
+// Mengambil data soal spesifik dari tabel 'soal' yang belum pernah dikerjakan.
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Timer, SkipForward, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -17,11 +16,10 @@ import { ErrorBoundary } from 'react-error-boundary';
 import MathBoard from '@/components/math/math-board';
 import FeedbackOverlay from '@/components/math/feedback-overlay';
 import { useLatihan } from '@/hooks/use-latihan';
-import { generateSesiSoal } from '@/lib/soal-generator';
-import { OPERASI_LABEL, MAX_PERCOBAAN, SOAL_PER_SESI, TIMER_DEFAULT_DETIK } from '@/lib/constants';
-import type { Operasi, Kesulitan } from '@/types/math';
+import { OPERASI_LABEL, MAX_PERCOBAAN, TIMER_DEFAULT_DETIK } from '@/lib/constants';
+import type { Operasi } from '@/types/math';
+import { createClient } from '@/lib/supabase/client';
 
-/** Fallback saat ErrorBoundary menangkap error */
 function ErrorFallback({ resetErrorBoundary }: { resetErrorBoundary: () => void }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-4 p-6">
@@ -34,33 +32,74 @@ function ErrorFallback({ resetErrorBoundary }: { resetErrorBoundary: () => void 
   );
 }
 
-export default function LatihanPage() {
+function KerjakanTugasPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const operasiRaw = searchParams.get('op') as Operasi | null;
+  const operasi = operasiRaw ?? 'penjumlahan';
+  
   const latihan = useLatihan();
-  const [operasi, setOperasi] = useState<Operasi>('penjumlahan');
-  const [kesulitan, setKesulitan] = useState<Kesulitan>('mudah');
+  const supabase = createClient();
+  
   const [timerDetik, setTimerDetik] = useState(TIMER_DEFAULT_DETIK);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [isFetching, setIsFetching] = useState(true);
   const sesiMulaiRef = useRef(Date.now());
 
-  // Simpan referensi fungsi yang stabil untuk dipakai di timer
   const lewatiSoalRef = useRef(latihan.lewatiSoal);
   lewatiSoalRef.current = latihan.lewatiSoal;
 
-  // Load pilihan dan mulai sesi
   useEffect(() => {
-    const op = sessionStorage.getItem('operasi') as Operasi | null;
-    const ks = sessionStorage.getItem('kesulitan') as Kesulitan | null;
-    if (op) setOperasi(op);
-    if (ks) setKesulitan(ks);
+    const fetchSoal = async () => {
+      const siswaId = sessionStorage.getItem('siswaId');
+      if (!siswaId) {
+        router.replace('/');
+        return;
+      }
+      
+      const { data: soalAktif } = await supabase.from('soal').select('*').eq('aktif', true).eq('operasi', operasi);
+      if (!soalAktif || soalAktif.length === 0) {
+        setIsFetching(false);
+        return;
+      }
 
-    const soalList = generateSesiSoal(op ?? 'penjumlahan', ks ?? 'mudah', SOAL_PER_SESI);
-    latihan.mulaiSesi(soalList);
-    setIsTimerRunning(true);
-    sesiMulaiRef.current = Date.now();
-  }, []);
+      const { data: sesiList } = await supabase.from('sesi_latihan').select('id').eq('siswa_id', siswaId);
+      
+      const attempted = new Set();
+      if (sesiList && sesiList.length > 0) {
+        const sesiIds = (sesiList as any[]).map(s => s.id);
+        const { data: detailList } = await supabase.from('detail_jawaban').select('soal').in('sesi_id', sesiIds);
+        if (detailList) {
+          (detailList as any[]).forEach(d => {
+            if (d.soal && typeof d.soal === 'object') {
+              const s = d.soal as any;
+              attempted.add(`${s.angka1}-${s.angka2}-${s.operasi}`);
+            }
+          });
+        }
+      }
 
-  // Timer countdown — gunakan ref untuk menghindari dependency pada object latihan
+      const pending = (soalAktif as any[]).filter(s => !attempted.has(`${s.angka1}-${s.angka2}-${s.operasi}`));
+      
+      if (pending.length === 0) {
+        setIsFetching(false);
+        return;
+      }
+
+      latihan.mulaiSesi(pending.map((s: any) => ({
+        angka1: s.angka1,
+        angka2: s.angka2,
+        operasi: s.operasi as Operasi,
+        kesulitan: s.kesulitan as any
+      })));
+      setIsTimerRunning(true);
+      sesiMulaiRef.current = Date.now();
+      setIsFetching(false);
+    };
+
+    fetchSoal();
+  }, [operasi]);
+
   useEffect(() => {
     if (!isTimerRunning || latihan.state !== 'MENGERJAKAN') return;
 
@@ -77,13 +116,11 @@ export default function LatihanPage() {
     return () => clearInterval(interval);
   }, [isTimerRunning, latihan.state]);
 
-  // Reset timer saat soal berikutnya
   const handleSoalBerikutnya = useCallback(() => {
     setTimerDetik(TIMER_DEFAULT_DETIK);
     latihan.soalBerikutnya();
   }, [latihan]);
 
-  // Simpan sesi ke DB + navigasi ke rekap saat sesi selesai
   useEffect(() => {
     if (!latihan.sesiSelesai) return;
 
@@ -114,12 +151,11 @@ export default function LatihanPage() {
       }),
     }).catch(console.error);
 
-    // Simpan rekap ke sessionStorage dan navigate
     sessionStorage.setItem('rekap', JSON.stringify(rekap));
+    // Kembali ke halaman tugas alih-alih rekap jika diperlukan, tapi rekap lebih baik untuk memberikan skor!
     router.push('/rekap');
   }, [latihan.sesiSelesai, latihan.rekap, router, operasi]);
 
-  // Format timer
   const formatTimer = (detik: number) => {
     const m = Math.floor(detik / 60);
     const s = detik % 60;
@@ -132,32 +168,40 @@ export default function LatihanPage() {
       ? 'text-amber-500'
       : 'text-muted-foreground';
 
-  if (!latihan.soalAktif) {
+  if (isFetching) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center">
           <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-sm text-muted-foreground mt-3">Menyiapkan soal...</p>
+          <p className="text-sm text-muted-foreground mt-3">Menyiapkan soal tugas...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (!latihan.soalAktif) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center gap-4">
+        <span className="text-4xl">✅</span>
+        <h2 className="text-2xl font-bold">Hebat!</h2>
+        <p className="text-muted-foreground">Semua tugas pada kategori ini sudah kamu kerjakan.</p>
+        <Button onClick={() => router.push('/tugas')}>Kembali ke Daftar Tugas</Button>
       </div>
     );
   }
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-6 p-6 relative">
-      {/* Header info */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         className="flex items-center justify-between w-full max-w-sm"
       >
-        {/* Progress soal */}
         <div className="flex flex-col gap-1 flex-1">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span className="font-semibold">
-              ✏️ {OPERASI_LABEL[operasi]} — Soal {latihan.indexSoal + 1}/{latihan.totalSoal}
+            <span className="font-semibold text-orange-600">
+              📋 Tugas {OPERASI_LABEL[operasi]} — Soal {latihan.indexSoal + 1}/{latihan.totalSoal}
             </span>
-            {/* Timer */}
             <div className={`flex items-center gap-1 font-mono font-bold ${timerColor}`}>
               <Timer className="w-3.5 h-3.5" />
               {formatTimer(timerDetik)}
@@ -170,7 +214,6 @@ export default function LatihanPage() {
         </div>
       </motion.div>
 
-      {/* MathBoard — mode latihan, dibungkus ErrorBoundary */}
       <ErrorBoundary FallbackComponent={ErrorFallback}>
         <MathBoard
           angka1={latihan.soalAktif.angka1}
@@ -186,7 +229,6 @@ export default function LatihanPage() {
         />
       </ErrorBoundary>
 
-      {/* Status message */}
       <AnimatePresence mode="wait">
         {latihan.state === 'SELESAI_BENAR' && (
           <motion.div
@@ -223,10 +265,6 @@ export default function LatihanPage() {
               Tidak apa-apa! Perhatikan jawabannya, lalu coba soal berikutnya.
             </p>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => router.push('/belajar')} className="gap-2">
-                <BookOpen className="w-4 h-4" />
-                Pelajari Dulu
-              </Button>
               <Button onClick={handleSoalBerikutnya} className="gap-2">
                 Soal Berikutnya →
               </Button>
@@ -235,7 +273,6 @@ export default function LatihanPage() {
         )}
       </AnimatePresence>
 
-      {/* Tombol lewati */}
       {(latihan.state === 'MENGERJAKAN' || latihan.state === 'WRONG') && (
         <Button
           variant="ghost"
@@ -248,7 +285,6 @@ export default function LatihanPage() {
         </Button>
       )}
 
-      {/* Feedback overlay */}
       <FeedbackOverlay
         visible={latihan.state === 'WRONG' && latihan.feedbackPesan !== ''}
         pesan={latihan.feedbackPesan}
@@ -261,5 +297,13 @@ export default function LatihanPage() {
         onTutup={latihan.tutupFeedback}
       />
     </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={<div>Memuat tugas...</div>}>
+      <KerjakanTugasPage />
+    </Suspense>
   );
 }
