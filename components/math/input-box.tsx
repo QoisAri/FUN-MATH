@@ -117,6 +117,7 @@ export default function InputBox({
             STATE_CLASSES[state],
             state === 'hint' && 'animate-hint-pulse',
             isReadOnly && 'cursor-default',
+            disabled && 'opacity-40 cursor-not-allowed bg-secondary/50 border-dashed border-border'
           )}
           aria-label={`Kolom jawaban ${id ?? ''}`}
         />

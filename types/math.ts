@@ -41,6 +41,14 @@ export interface LangkahHitung {
   hasil: number;
   /** Carry keluar ke kolom berikutnya */
   carryBaru?: number;
+  /** Kolom-kolom yang di-highlight pada baris angka 1 / atas (mode belajar) */
+  highlightBaris1?: number[];
+  /** Kolom-kolom yang di-highlight pada baris angka 2 / bawah (mode belajar) */
+  highlightBaris2?: number[];
+  /** Keadaan digit-digit angka atas (angka1) pada langkah ini setelah peminjaman */
+  digitAtasAktif?: number[];
+  /** Indeks baris hasil perkalian parsial (khusus perkalian) */
+  barisPerkalianIdx?: number;
   /** Penjelasan singkat langkah ini (≤ 10 kata, Bahasa Indonesia) */
   penjelasan: string;
 }

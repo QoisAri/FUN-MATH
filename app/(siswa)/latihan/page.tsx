@@ -179,8 +179,11 @@ export default function LatihanPage() {
           mode="latihan"
           jawabanState={latihan.jawabanState}
           carryJawabanState={latihan.carryJawabanState}
+          barisPerkalianJawaban={latihan.barisPerkalianJawaban}
+          barisPerkalianCarryJawaban={latihan.barisPerkalianCarryJawaban}
           onJawaban={latihan.isiJawaban}
           onCarryJawaban={latihan.isiCarryJawaban}
+          onParsialJawaban={latihan.isiParsialJawaban}
           carryVisible={latihan.carryVisible}
           borrowVisible={latihan.borrowVisible}
         />

@@ -1,5 +1,5 @@
 // ============================================
-// Middleware — Proteksi Route Admin
+// Proxy — Proteksi Route Admin
 // ============================================
 // Route /dashboard dan /siswa/* memerlukan auth Supabase.
 // Redirect ke /login jika belum login.
@@ -10,7 +10,7 @@ import { createServerClient } from '@supabase/ssr';
 
 const PROTECTED_ROUTES = ['/dashboard', '/siswa'];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Hanya cek route admin yang dilindungi

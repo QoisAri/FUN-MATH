@@ -25,6 +25,14 @@ interface SiswaPublik {
   avatar_url: string | null;
 }
 
+const loadingTexts = [
+  'Menyiapkan angka...',
+  'Mengasah pensil...',
+  'Membuka buku matematika...',
+  'Menghitung bintang...',
+  'Hampir siap!...'
+];
+
 export default function LandingPage() {
   const router = useRouter();
   const [siswaList, setSiswaList] = useState<SiswaPublik[]>([]);
@@ -33,6 +41,49 @@ export default function LandingPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [verifying, setVerifying] = useState(false);
+
+  // Splash screen states
+  const [showSplash, setShowSplash] = useState(true);
+  const [progress, setProgress] = useState(0);
+  const [loadingText, setLoadingText] = useState(loadingTexts[0]);
+
+  // Cek sessionStorage saat komponen pertama kali dipasang
+  useEffect(() => {
+    const hasSeen = sessionStorage.getItem('hasSeenSplash');
+    if (hasSeen === 'true') {
+      setShowSplash(false);
+    }
+  }, []);
+
+  // Timer progress bar splash screen
+  useEffect(() => {
+    if (!showSplash) return;
+
+    const progressInterval = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 100) {
+          clearInterval(progressInterval);
+          sessionStorage.setItem('hasSeenSplash', 'true');
+          setTimeout(() => {
+            setShowSplash(false);
+          }, 300);
+          return 100;
+        }
+        return prev + 2;
+      });
+    }, 40);
+
+    let textIndex = 0;
+    const textInterval = setInterval(() => {
+      textIndex = (textIndex + 1) % loadingTexts.length;
+      setLoadingText(loadingTexts[textIndex]);
+    }, 400); 
+
+    return () => {
+      clearInterval(progressInterval);
+      clearInterval(textInterval);
+    };
+  }, [showSplash]);
 
   // Fetch daftar siswa — TANPA kolom pin
   useEffect(() => {
@@ -105,6 +156,93 @@ export default function LandingPage() {
 
   return (
     <div className="flex flex-col flex-1 items-center justify-center min-h-screen p-4 relative overflow-hidden">
+      <AnimatePresence>
+        {showSplash && (
+          <motion.div
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0, scale: 1.05 }}
+            transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-linear-to-r from-[#eff6ff] via-[#f5f3ff] to-[#ecfdf5] p-6"
+          >
+            {/* Glow/blur dekoratif */}
+            <div className="absolute top-1/4 left-1/4 w-72 h-72 rounded-full bg-blue-200/40 opacity-70 blur-3xl" />
+            <div className="absolute bottom-1/4 right-1/4 w-72 h-72 rounded-full bg-emerald-200/40 opacity-70 blur-3xl" />
+
+            <div className="relative z-10 flex flex-col items-center max-w-sm w-full text-center">
+              {/* Maskot floating */}
+              <motion.div
+                animate={{
+                  y: [0, -10, 0],
+                }}
+                transition={{
+                  duration: 2.5,
+                  repeat: Infinity,
+                  ease: 'easeInOut',
+                }}
+                className="relative w-40 h-40 md:w-48 md:h-48 mb-6 flex items-center justify-center drop-shadow-xl"
+              >
+                <Image
+                  src="/images/math_mascot.png"
+                  alt="Maskot FUN-MATH"
+                  width={180}
+                  height={180}
+                  priority
+                  className="object-contain"
+                />
+              </motion.div>
+
+              {/* Judul & Slogan */}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1, duration: 0.4 }}
+                className="mb-8"
+              >
+                <h2 className="text-2xl md:text-3xl font-black bg-linear-to-r from-blue-600 via-violet-600 to-emerald-600 bg-clip-text text-transparent tracking-wide flex items-center justify-center gap-1.5">
+                  <span className="text-yellow-400">✦</span> BELAJAR MATEMATIKA <span className="text-yellow-400">✦</span>
+                </h2>
+                <p className="text-muted-foreground mt-2 text-sm md:text-base font-bold">
+                  Seru, Jelas, Langkah demi Langkah
+                </p>
+              </motion.div>
+
+              {/* Loading progress */}
+              <div className="w-full px-4">
+                <div className="h-5 mb-1">
+                  <AnimatePresence mode="wait">
+                    <motion.p
+                      key={loadingText}
+                      initial={{ opacity: 0, y: 3 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -3 }}
+                      transition={{ duration: 0.12 }}
+                      className="text-xs font-bold text-violet-600/80"
+                    >
+                      {loadingText}
+                    </motion.p>
+                  </AnimatePresence>
+                </div>
+
+                {/* Progress bar */}
+                <div className="w-full h-3 bg-gray-200/60 backdrop-blur-xs rounded-full overflow-hidden p-0.5 border border-white/50 shadow-inner flex items-center">
+                  <div
+                    className="h-full rounded-full bg-linear-to-r from-blue-500 via-violet-500 to-emerald-500 shadow-sm relative overflow-hidden transition-all duration-75 ease-out"
+                    style={{ width: `${progress}%` }}
+                  >
+                    {/* Kilatan cahaya berjalan */}
+                    <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/40 to-transparent w-full h-full animate-shimmer" />
+                  </div>
+                </div>
+
+                <span className="text-[10px] font-black text-muted-foreground/60 mt-1.5 block">
+                  {progress}%
+                </span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Background decoration */}
       <div className="absolute inset-0 -z-10">
         <div className="absolute top-10 left-10 w-32 h-32 rounded-full bg-blue-100 opacity-50 blur-3xl" />

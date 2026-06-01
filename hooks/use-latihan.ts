@@ -10,7 +10,7 @@
 //      → LEWATI → REVEALED → soal berikutnya
 
 import { useState, useCallback, useMemo } from 'react';
-import { solve, validateColumn, getDigits, getCarrySteps, getBorrowSteps } from '@/lib/math-engine';
+import { solve, validateColumn, getDigits, getCarrySteps, padDigits } from '@/lib/math-engine';
 import { MAX_PERCOBAAN } from '@/lib/constants';
 import type { LatihanState, InputBoxState, Operasi, Soal, RekapSoal } from '@/types/math';
 
@@ -27,6 +27,10 @@ interface UseLatihanReturn {
   jawabanState: JawabanKolomState[];
   /** State per kolom simpanan (carry) */
   carryJawabanState: JawabanKolomState[];
+  /** State jawaban hasil parsial perkalian (mode latihan) */
+  barisPerkalianJawaban: JawabanKolomState[][];
+  /** State jawaban simpanan hasil parsial perkalian (mode latihan) */
+  barisPerkalianCarryJawaban: JawabanKolomState[][];
   /** Soal yang sedang dikerjakan */
   soalAktif: Soal | null;
   /** Index soal saat ini */
@@ -54,7 +58,9 @@ interface UseLatihanReturn {
   /** Handle jawaban di kolom tertentu */
   isiJawaban: (kolom: number, nilai: number) => void;
   /** Handle jawaban simpanan di kolom tertentu */
-  isiCarryJawaban: (kolom: number, nilai: number) => void;
+  isiCarryJawaban: (kolom: number, nilai: number, barisIdx?: number) => void;
+  /** Handle jawaban hasil parsial perkalian */
+  isiParsialJawaban: (barisIdx: number, kolom: number, nilai: number) => void;
   /** Lewati soal */
   lewatiSoal: () => void;
   /** Coba lagi kolom yang salah */
@@ -75,6 +81,8 @@ export function useLatihan(): UseLatihanReturn {
   const [indexSoal, setIndexSoal] = useState(0);
   const [jawabanState, setJawabanState] = useState<JawabanKolomState[]>([]);
   const [carryJawabanState, setCarryJawabanState] = useState<JawabanKolomState[]>([]);
+  const [barisPerkalianJawaban, setBarisPerkalianJawaban] = useState<JawabanKolomState[][]>([]);
+  const [barisPerkalianCarryJawaban, setBarisPerkalianCarryJawaban] = useState<JawabanKolomState[][]>([]);
   const [rekap, setRekap] = useState<RekapSoal[]>([]);
   const [feedbackPesan, setFeedbackPesan] = useState('');
   const [feedbackHint, setFeedbackHint] = useState('');
@@ -104,8 +112,54 @@ export function useLatihan(): UseLatihanReturn {
 
   const borrowVisible = useMemo(() => {
     if (!perhitungan || soalAktif?.operasi !== 'pengurangan') return [];
-    return getBorrowSteps(perhitungan);
-  }, [perhitungan, soalAktif]);
+
+    const listBorrow: { kolom: number; nilaiSebelum: number; nilaiSesudah: number }[] = [];
+    const digitsA = getDigits(soalAktif.angka1);
+    const maxLen = perhitungan.langkahLangkah.find((l) => l.digitAtasAktif)?.digitAtasAktif?.length ?? digitsA.length;
+    const paddedA = padDigits(digitsA, maxLen);
+
+    for (const l of perhitungan.langkahLangkah) {
+      if (l.kolom === -1 || !l.digitAtasAktif) continue;
+
+      let kolomKananSelesai = true;
+      for (let k = 0; k < l.kolom; k++) {
+        if (jawabanState[k]?.state !== 'correct') {
+          kolomKananSelesai = false;
+          break;
+        }
+      }
+      if (!kolomKananSelesai) continue;
+
+      for (let col = 0; col < maxLen; col++) {
+        const nilaiAsli = paddedA[col];
+        const nilaiAktif = l.digitAtasAktif[col];
+        if (nilaiAktif !== nilaiAsli) {
+          if (col === l.kolom) {
+            if (!listBorrow.some((b) => b.kolom === col)) {
+              listBorrow.push({
+                kolom: col,
+                nilaiSebelum: nilaiAsli,
+                nilaiSesudah: nilaiAktif,
+              });
+            }
+          } else if (col > l.kolom) {
+            const peminjamSelesai = jawabanState[l.kolom]?.state === 'correct';
+            if (peminjamSelesai) {
+              if (!listBorrow.some((b) => b.kolom === col)) {
+                listBorrow.push({
+                  kolom: col,
+                  nilaiSebelum: nilaiAsli,
+                  nilaiSesudah: nilaiAktif,
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return listBorrow;
+  }, [perhitungan, soalAktif, jawabanState]);
 
   // Percobaan aktif (untuk kolom yang salah)
   const percobaanAktif = kolomSalah !== null
@@ -128,6 +182,31 @@ export function useLatihan(): UseLatihanReturn {
     }));
     setJawabanState(jawaban);
     setCarryJawabanState(carryJawaban);
+
+    if (soal.operasi === 'perkalian' && hasil.barisPerkalian) {
+      const parsial = hasil.barisPerkalian.map((baris) => {
+        const len = baris.langkahLangkah.length;
+        return Array(len).fill(null).map(() => ({
+          nilai: null,
+          state: 'idle' as InputBoxState,
+          jumlahPercobaan: 0,
+        }));
+      });
+      setBarisPerkalianJawaban(parsial);
+
+      const parsialCarry = hasil.barisPerkalian.map(() => {
+        return digits.map(() => ({
+          nilai: null,
+          state: 'idle' as InputBoxState,
+          jumlahPercobaan: 0,
+        }));
+      });
+      setBarisPerkalianCarryJawaban(parsialCarry);
+    } else {
+      setBarisPerkalianJawaban([]);
+      setBarisPerkalianCarryJawaban([]);
+    }
+
     setFeedbackPesan('');
     setFeedbackHint('');
     setKolomSalah(null);
@@ -146,6 +225,70 @@ export function useLatihan(): UseLatihanReturn {
     }
   }, [initJawaban]);
 
+  /** Pengecekan status selesai sesi latihan */
+  const checkSelesaiSesi = useCallback((
+    updatedJawaban?: JawabanKolomState[],
+    updatedCarry?: JawabanKolomState[],
+    updatedParsial?: JawabanKolomState[][],
+    updatedParsialCarry?: JawabanKolomState[][]
+  ) => {
+    if (!perhitungan) return;
+
+    const currentJawaban = updatedJawaban ?? jawabanState;
+    const currentCarry = updatedCarry ?? carryJawabanState;
+    const currentParsial = updatedParsial ?? barisPerkalianJawaban;
+    const currentParsialCarry = updatedParsialCarry ?? barisPerkalianCarryJawaban;
+
+    const jawabanBenar = currentJawaban.every((j) => j.state === 'correct');
+    if (!jawabanBenar) return;
+
+    const carryBenar = carryVisible.every((cv) => {
+      if (soalAktif?.operasi === 'perkalian') {
+        if (cv.barisPerkalianIdx !== undefined) {
+          const cState = currentParsialCarry?.[cv.barisPerkalianIdx]?.[cv.kolom];
+          return cState?.state === 'correct';
+        } else {
+          const cState = currentCarry[cv.kolom];
+          return cState?.state === 'correct';
+        }
+      }
+      const cState = currentCarry[cv.kolom];
+      return cState?.state === 'correct';
+    });
+    if (!carryBenar) return;
+
+    if (soalAktif?.operasi === 'perkalian' && perhitungan.barisPerkalian) {
+      const parsialBenar = currentParsial.every((row) =>
+        row.every((j) => j.state === 'correct')
+      );
+      if (!parsialBenar) return;
+    }
+
+    setState('SELESAI_BENAR');
+    const waktu = Math.round((Date.now() - waktuMulai) / 1000);
+    setWaktuDetik(waktu);
+    setRekap((r) => [
+      ...r,
+      {
+        soal: soalAktif!,
+        jawabanSiswa: currentJawaban.map((j) => ({
+          kolom: 0,
+          nilai: j.nilai,
+          state: j.state,
+          jumlahPercobaan: j.jumlahPercobaan,
+        })),
+        status: 'benar',
+        jumlahPercobaan: Math.max(
+          ...currentJawaban.map((j) => j.jumlahPercobaan),
+          ...currentCarry.map((c) => c?.jumlahPercobaan ?? 0),
+          ...currentParsial.flatMap((row) => row.map((j) => j.jumlahPercobaan ?? 0)),
+          1
+        ),
+        waktuDetik: waktu,
+      },
+    ]);
+  }, [perhitungan, jawabanState, carryJawabanState, barisPerkalianJawaban, barisPerkalianCarryJawaban, carryVisible, soalAktif, waktuMulai]);
+
   /** Handle jawaban siswa di kolom tertentu */
   const isiJawaban = useCallback((kolom: number, nilai: number) => {
     if (!perhitungan || state !== 'MENGERJAKAN') return;
@@ -153,51 +296,21 @@ export function useLatihan(): UseLatihanReturn {
     const nilaiBenar = digitsHasil[kolom];
     const isBenar = validateColumn(nilai, nilaiBenar);
 
+    let nextJawabanState: JawabanKolomState[] = [];
+
     setJawabanState((prev) => {
       const updated = [...prev];
       const current = { ...updated[kolom] };
       current.nilai = nilai;
       current.jumlahPercobaan += 1;
-
-      if (isBenar) {
-        current.state = 'correct';
-      } else {
-        current.state = 'wrong';
-      }
-
+      current.state = isBenar ? 'correct' : 'wrong';
       updated[kolom] = current;
+      nextJawabanState = updated;
       return updated;
     });
 
     if (isBenar) {
-      setJawabanState((prev) => {
-        const semuaBenar = prev.every(
-          (j, i) => i === kolom ? true : j.state === 'correct'
-        );
-
-        if (semuaBenar) {
-          setState('SELESAI_BENAR');
-          const waktu = Math.round((Date.now() - waktuMulai) / 1000);
-          setWaktuDetik(waktu);
-          setRekap((r) => [
-            ...r,
-            {
-              soal: soalAktif!,
-              jawabanSiswa: prev.map((j) => ({
-                kolom: 0,
-                nilai: j.nilai,
-                state: j.state,
-                jumlahPercobaan: j.jumlahPercobaan,
-              })),
-              status: 'benar',
-              jumlahPercobaan: Math.max(...prev.map((j) => j.jumlahPercobaan)),
-              waktuDetik: waktu,
-            },
-          ]);
-        }
-
-        return prev;
-      });
+      setTimeout(() => checkSelesaiSesi(nextJawabanState, carryJawabanState, barisPerkalianJawaban), 10);
     } else {
       setKolomSalah(kolom);
       setState('WRONG');
@@ -228,51 +341,118 @@ export function useLatihan(): UseLatihanReturn {
         }
       }
     }
-  }, [perhitungan, state, digitsHasil, jawabanState, soalAktif, carryVisible, borrowVisible, waktuMulai]);
+  }, [perhitungan, state, digitsHasil, jawabanState, carryJawabanState, barisPerkalianJawaban, carryVisible, borrowVisible, waktuMulai, checkSelesaiSesi, soalAktif]);
 
   /** Handle jawaban siswa untuk simpanan (carry) */
-  const isiCarryJawaban = useCallback((kolom: number, nilai: number) => {
+  const isiCarryJawaban = useCallback((kolom: number, nilai: number, barisIdx?: number) => {
     if (!perhitungan || state !== 'MENGERJAKAN') return;
 
-    const expectedCarry = carryVisible.find((c) => c.kolom === kolom)?.carry;
+    const expectedCarry = carryVisible.find(
+      (c) => c.kolom === kolom && (barisIdx === undefined || c.barisPerkalianIdx === barisIdx)
+    )?.carry;
     if (expectedCarry === undefined) return;
 
     const isBenar = validateColumn(nilai, expectedCarry);
 
-    setCarryJawabanState((prev) => {
-      const updated = [...prev];
-      if (!updated[kolom]) {
-        updated[kolom] = { nilai: null, state: 'idle', jumlahPercobaan: 0 };
-      }
-      const current = { ...updated[kolom] };
-      current.nilai = nilai;
-      current.jumlahPercobaan += 1;
+    if (soalAktif?.operasi === 'perkalian' && barisIdx !== undefined) {
+      let nextParsialCarryState: JawabanKolomState[][] = [];
+      setBarisPerkalianCarryJawaban((prev) => {
+        const updated = prev.map((row, bIdx) => {
+          if (bIdx !== barisIdx) return row;
+          const updatedRow = [...row];
+          if (!updatedRow[kolom]) {
+            updatedRow[kolom] = { nilai: null, state: 'idle', jumlahPercobaan: 0 };
+          }
+          const current = { ...updatedRow[kolom] };
+          current.nilai = nilai;
+          current.jumlahPercobaan = (current.jumlahPercobaan ?? 0) + 1;
+          current.state = isBenar ? 'correct' : 'wrong';
+          updatedRow[kolom] = current;
+          return updatedRow;
+        });
+        nextParsialCarryState = updated;
+        return updated;
+      });
 
       if (isBenar) {
-        current.state = 'correct';
+        setTimeout(() => checkSelesaiSesi(jawabanState, carryJawabanState, barisPerkalianJawaban, nextParsialCarryState), 10);
       } else {
-        current.state = 'wrong';
-      }
-
-      updated[kolom] = current;
-      return updated;
-    });
-
-    if (!isBenar) {
-      setKolomSalah(kolom);
-      setState('WRONG');
-
-      const percobaan = (carryJawabanState[kolom]?.jumlahPercobaan ?? 0) + 1;
-
-      if (percobaan >= MAX_PERCOBAAN) {
-        setFeedbackPesan('Jawaban akan ditampilkan');
-        setFeedbackHint('');
-      } else {
+        setKolomSalah(kolom);
+        setState('WRONG');
         setFeedbackPesan('Simpanan belum tepat, coba lagi!');
         setFeedbackHint('Hitung kembali nilai simpanan di atas');
       }
+    } else {
+      let nextCarryState: JawabanKolomState[] = [];
+      setCarryJawabanState((prev) => {
+        const updated = [...prev];
+        if (!updated[kolom]) {
+          updated[kolom] = { nilai: null, state: 'idle', jumlahPercobaan: 0 };
+        }
+        const current = { ...updated[kolom] };
+        current.nilai = nilai;
+        current.jumlahPercobaan += 1;
+        current.state = isBenar ? 'correct' : 'wrong';
+        updated[kolom] = current;
+        nextCarryState = updated;
+        return updated;
+      });
+
+      if (isBenar) {
+        setTimeout(() => checkSelesaiSesi(jawabanState, nextCarryState, barisPerkalianJawaban, barisPerkalianCarryJawaban), 10);
+      } else {
+        setKolomSalah(kolom);
+        setState('WRONG');
+
+        const percobaan = (carryJawabanState[kolom]?.jumlahPercobaan ?? 0) + 1;
+
+        if (percobaan >= MAX_PERCOBAAN) {
+          setFeedbackPesan('Jawaban akan ditampilkan');
+          setFeedbackHint('');
+        } else {
+          setFeedbackPesan('Simpanan belum tepat, coba lagi!');
+          setFeedbackHint('Hitung kembali nilai simpanan di atas');
+        }
+      }
     }
-  }, [perhitungan, state, carryVisible, carryJawabanState]);
+  }, [perhitungan, state, carryVisible, carryJawabanState, jawabanState, barisPerkalianJawaban, barisPerkalianCarryJawaban, checkSelesaiSesi, soalAktif]);
+
+  /** Handle jawaban siswa untuk perkalian parsial */
+  const isiParsialJawaban = useCallback((barisIdx: number, kolom: number, nilai: number) => {
+    if (!perhitungan || state !== 'MENGERJAKAN' || !perhitungan.barisPerkalian) return;
+
+    const baris = perhitungan.barisPerkalian[barisIdx];
+    if (!baris) return;
+
+    const nilaiBenar = baris.langkahLangkah[kolom].hasil;
+    const isBenar = validateColumn(nilai, nilaiBenar);
+
+    let nextParsialState: JawabanKolomState[][] = [];
+
+    setBarisPerkalianJawaban((prev) => {
+      const updated = prev.map((bRow, bIdx) => {
+        if (bIdx !== barisIdx) return bRow;
+        const updatedRow = [...bRow];
+        const current = { ...updatedRow[kolom] };
+        current.nilai = nilai;
+        current.jumlahPercobaan = (current.jumlahPercobaan ?? 0) + 1;
+        current.state = isBenar ? 'correct' : 'wrong';
+        updatedRow[kolom] = current;
+        return updatedRow;
+      });
+      nextParsialState = updated;
+      return updated;
+    });
+
+    if (isBenar) {
+      setTimeout(() => checkSelesaiSesi(jawabanState, carryJawabanState, nextParsialState), 10);
+    } else {
+      setKolomSalah(kolom);
+      setState('WRONG');
+      setFeedbackPesan('Jawaban belum tepat, coba lagi!');
+      setFeedbackHint('Periksa kembali perkalian digit ini');
+    }
+  }, [perhitungan, state, jawabanState, carryJawabanState, barisPerkalianJawaban, checkSelesaiSesi]);
 
   /** Coba lagi kolom yang salah */
   const cobaLagi = useCallback(() => {
@@ -282,27 +462,58 @@ export function useLatihan(): UseLatihanReturn {
     setCarryJawabanState((prev) => 
       prev.map(c => c?.state === 'wrong' ? { ...c, nilai: null, state: 'hint' } : c)
     );
+    setBarisPerkalianJawaban((prev) =>
+      prev.map(row =>
+        row.map(j => j.state === 'wrong' ? { ...j, nilai: null, state: 'hint' } : j)
+      )
+    );
+    setBarisPerkalianCarryJawaban((prev) =>
+      prev.map(row =>
+        row.map(c => c?.state === 'wrong' ? { ...c, nilai: null, state: 'hint' } : c)
+      )
+    );
 
     setState('MENGERJAKAN');
     setFeedbackPesan('');
 
     // Focus kembali ke kolom yang salah
     setTimeout(() => {
-      // Cari jika ada carry yang salah
+      // 1. Cari jika ada carry parsial perkalian yang salah
+      for (let b = 0; b < barisPerkalianCarryJawaban.length; b++) {
+        const wrongCarryIdx = barisPerkalianCarryJawaban[b].findIndex(c => c?.state === 'wrong');
+        if (wrongCarryIdx !== -1) {
+          const input = document.getElementById(`carry-kolom-${wrongCarryIdx}`);
+          if (input) (input as HTMLInputElement).focus();
+          return;
+        }
+      }
+
+      // 2. Cari jika ada carry standard yang salah
       const wrongCarryIdx = carryJawabanState.findIndex(c => c?.state === 'wrong');
       if (wrongCarryIdx !== -1) {
         const input = document.getElementById(`carry-kolom-${wrongCarryIdx}`);
         if (input) (input as HTMLInputElement).focus();
         return;
       }
+
+      // 3. Cari jika ada baris parsial perkalian yang salah
+      for (let b = 0; b < barisPerkalianJawaban.length; b++) {
+        const wrongCol = barisPerkalianJawaban[b].findIndex(j => j.state === 'wrong');
+        if (wrongCol !== -1) {
+          const input = document.getElementById(`input-parsial-${b}-${wrongCol}`);
+          if (input) (input as HTMLInputElement).focus();
+          return;
+        }
+      }
       
+      // 4. Cari jika ada hasil akhir yang salah
       const wrongIdx = jawabanState.findIndex(j => j.state === 'wrong');
       if (wrongIdx !== -1) {
         const input = document.getElementById(`input-kolom-${wrongIdx}`);
         if (input) (input as HTMLInputElement).focus();
       }
     }, 100);
-  }, [jawabanState, carryJawabanState]);
+  }, [jawabanState, carryJawabanState, barisPerkalianJawaban, barisPerkalianCarryJawaban]);
 
   /** Lihat cara penyelesaian (reveal semua) */
   const lihatCara = useCallback(() => {
@@ -322,6 +533,32 @@ export function useLatihan(): UseLatihanReturn {
         return c;
       })
     );
+    setBarisPerkalianJawaban((prev) => {
+      if (!perhitungan || !perhitungan.barisPerkalian) return prev;
+      return prev.map((row, barisIdx) => {
+        const baris = perhitungan.barisPerkalian![barisIdx];
+        return row.map((j, col) => ({
+          ...j,
+          nilai: baris.langkahLangkah[col].hasil,
+          state: 'revealed' as InputBoxState,
+        }));
+      });
+    });
+    setBarisPerkalianCarryJawaban((prev) => {
+      if (!perhitungan || !perhitungan.barisPerkalian) return prev;
+      return prev.map((row, barisIdx) => {
+        return row.map((c, col) => {
+          const expectedCarry = carryVisible.find(
+            (cv) => cv.kolom === col && cv.barisPerkalianIdx === barisIdx
+          )?.carry;
+          if (expectedCarry !== undefined) {
+            return { ...c, nilai: expectedCarry, state: 'revealed' as InputBoxState };
+          }
+          return c;
+        });
+      });
+    });
+
     setState('REVEALED');
     setFeedbackPesan('');
 
@@ -343,7 +580,7 @@ export function useLatihan(): UseLatihanReturn {
         waktuDetik: waktu,
       },
     ]);
-  }, [digitsHasil, soalAktif, jawabanState, waktuMulai]);
+  }, [digitsHasil, soalAktif, jawabanState, waktuMulai, carryVisible, perhitungan]);
 
   /** Lewati soal */
   const lewatiSoal = useCallback(() => {
@@ -352,8 +589,12 @@ export function useLatihan(): UseLatihanReturn {
 
   /** Tutup feedback overlay */
   const tutupFeedback = useCallback(() => {
-    setFeedbackPesan('');
-  }, []);
+    if (percobaanAktif >= MAX_PERCOBAAN) {
+      lihatCara();
+    } else {
+      cobaLagi();
+    }
+  }, [cobaLagi, lihatCara, percobaanAktif]);
 
   /** Lanjut ke soal berikutnya */
   const soalBerikutnya = useCallback(() => {
@@ -375,6 +616,8 @@ export function useLatihan(): UseLatihanReturn {
     state,
     jawabanState,
     carryJawabanState,
+    barisPerkalianJawaban,
+    barisPerkalianCarryJawaban,
     soalAktif,
     indexSoal,
     totalSoal: daftarSoal.length,
@@ -389,6 +632,7 @@ export function useLatihan(): UseLatihanReturn {
     mulaiSesi,
     isiJawaban,
     isiCarryJawaban,
+    isiParsialJawaban,
     lewatiSoal,
     cobaLagi,
     lihatCara,

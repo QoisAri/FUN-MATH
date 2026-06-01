@@ -25,8 +25,6 @@ interface OffsetIndicatorProps {
 export default function OffsetIndicator({ offset, baris }: OffsetIndicatorProps) {
   if (offset === 0) return null;
 
-  const label = `×${Math.pow(10, offset)}`;
-
   return (
     <TooltipProvider>
       <div className="flex items-center gap-0.5">
@@ -49,25 +47,12 @@ export default function OffsetIndicator({ offset, baris }: OffsetIndicatorProps)
             </TooltipTrigger>
             <TooltipContent side="bottom" className="text-xs">
               <p>
-                Baris {baris + 1} digeser {offset} posisi ({label})
+                Baris {baris + 1} digeser {offset} posisi
               </p>
             </TooltipContent>
           </Tooltip>
         ))}
 
-        {/* Label ×10, ×100 */}
-        <motion.span
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3, duration: 0.3 }}
-          className="text-xs font-bold ml-1 px-1.5 py-0.5 rounded"
-          style={{
-            color: 'oklch(0.5 0.15 85)',
-            backgroundColor: 'oklch(0.95 0.04 85)',
-          }}
-        >
-          {label}
-        </motion.span>
       </div>
     </TooltipProvider>
   );
