@@ -13,6 +13,8 @@ interface BorrowIndicatorProps {
   nilaiAsli: number;
   /** Angka setelah dipinjam (biasanya nilaiAsli - 1) */
   nilaiBaru: number;
+  /** Apakah hanya menampilkan nilai baru (karena nilai asli sudah dicoret di kotak utama) */
+  onlyNewValue?: boolean;
   /** Apakah indicator visible */
   visible?: boolean;
 }
@@ -20,6 +22,7 @@ interface BorrowIndicatorProps {
 export default function BorrowIndicator({
   nilaiAsli,
   nilaiBaru,
+  onlyNewValue = false,
   visible = true,
 }: BorrowIndicatorProps) {
   if (!visible) return null;
@@ -33,7 +36,9 @@ export default function BorrowIndicator({
       aria-label={`Dipinjam: ${nilaiAsli} menjadi ${nilaiBaru}`}
     >
       {/* Angka asli dicoret */}
-      <span className="borrow-strikethrough text-xs">{nilaiAsli}</span>
+      {!onlyNewValue && (
+        <span className="borrow-strikethrough text-xs">{nilaiAsli}</span>
+      )}
       {/* Angka baru */}
       <motion.span
         initial={{ scale: 0.5, opacity: 0 }}

@@ -243,6 +243,17 @@
   animation: glow-pulse 2s ease-in-out infinite;
 }
 
+/* Shimmer — efek berkilau pada loading progress */
+@keyframes shimmer {
+  0% { transform: translateX(-150%); }
+  50% { transform: translateX(150%); }
+  100% { transform: translateX(150%); }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite ease-in-out;
+}
+
 /* ============================================
    Reduced Motion — Aksesibilitas
    ============================================ */

@@ -33,13 +33,13 @@ export default function BelajarPage() {
 
     // Generate soal awal
     const soal = generateSoal(op ?? 'penjumlahan', ks ?? 'mudah');
-    animasi.setSoal(soal.angka1, soal.angka2, soal.operasi);
+    animasi.setSoal(soal.angka1, soal.angka2, soal.operasi, ks ?? 'mudah');
   }, []);
 
   // Generate soal baru
   const soalBaru = () => {
     const soal = generateSoal(operasi, kesulitan);
-    animasi.setSoal(soal.angka1, soal.angka2, soal.operasi);
+    animasi.setSoal(soal.angka1, soal.angka2, soal.operasi, kesulitan);
   };
 
   return (
@@ -68,6 +68,7 @@ export default function BelajarPage() {
           langkahAktif={animasi.langkahSekarang}
           carryVisible={animasi.carryVisible}
           borrowVisible={animasi.borrowVisible}
+          perhitunganOverride={animasi.perhitungan}
         />
       )}
 
@@ -78,7 +79,7 @@ export default function BelajarPage() {
         animate={{ opacity: 1, y: 0 }}
         className="text-center px-4 py-3 bg-card rounded-xl border border-border max-w-sm"
       >
-        <p className="text-sm font-medium">{animasi.penjelasan}</p>
+        <p className="text-sm font-medium" dangerouslySetInnerHTML={{ __html: animasi.penjelasan }} />
       </motion.div>
 
       {/* Kontrol navigasi */}

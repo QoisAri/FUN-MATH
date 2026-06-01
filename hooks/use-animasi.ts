@@ -7,9 +7,9 @@
 // Auto-play dengan interval, manual prev/next, dan highlight kolom aktif.
 
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { solve, getCarrySteps, getBorrowSteps } from '@/lib/math-engine';
+import { solve, enrichStepsForLearning, getDigits, padDigits } from '@/lib/math-engine';
 import { DELAY_ANIMASI_MS } from '@/lib/constants';
-import type { Operasi, HasilPerhitungan, LangkahHitung } from '@/types/math';
+import type { Operasi, Kesulitan, HasilPerhitungan, LangkahHitung } from '@/types/math';
 
 interface UseAnimasiReturn {
   /** Langkah saat ini (0-indexed) */
@@ -23,7 +23,7 @@ interface UseAnimasiReturn {
   /** Hasil perhitungan lengkap */
   perhitungan: HasilPerhitungan | null;
   /** Carry yang sudah terlihat sampai langkah ini */
-  carryVisible: { kolom: number; carry: number }[];
+  carryVisible: { kolom: number; carry: number; barisPerkalianIdx?: number }[];
   /** Borrow yang sudah terlihat sampai langkah ini */
   borrowVisible: { kolom: number; nilaiSebelum: number; nilaiSesudah: number }[];
   /** Penjelasan langkah saat ini */
@@ -37,13 +37,14 @@ interface UseAnimasiReturn {
   /** Toggle auto-play */
   togglePlay: () => void;
   /** Set soal baru untuk animasi */
-  setSoal: (angka1: number, angka2: number, operasi: Operasi) => void;
+  setSoal: (angka1: number, angka2: number, operasi: Operasi, kesulitan?: Kesulitan) => void;
 }
 
 export function useAnimasi(): UseAnimasiReturn {
   const [angka1, setAngka1] = useState(0);
   const [angka2, setAngka2] = useState(0);
   const [operasi, setOperasi] = useState<Operasi>('penjumlahan');
+  const [kesulitan, setKesulitan] = useState<Kesulitan>('mudah');
   const [langkahSekarang, setLangkahSekarang] = useState(-1);
   const [isPlaying, setIsPlaying] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -51,8 +52,10 @@ export function useAnimasi(): UseAnimasiReturn {
   // Hitung sekali
   const perhitungan = useMemo(() => {
     if (angka1 === 0 && angka2 === 0) return null;
-    return solve(angka1, angka2, operasi);
-  }, [angka1, angka2, operasi]);
+    const raw = solve(angka1, angka2, operasi);
+    // Perkaya langkah dengan deskripsi tambahan untuk mode belajar
+    return enrichStepsForLearning(raw, kesulitan);
+  }, [angka1, angka2, operasi, kesulitan]);
 
   const totalLangkah = perhitungan?.langkahLangkah.length ?? 0;
 
@@ -66,19 +69,48 @@ export function useAnimasi(): UseAnimasiReturn {
     return perhitungan.langkahLangkah
       .slice(0, langkahSekarang + 1)
       .filter((l) => l.carryBaru !== undefined && l.carryBaru > 0)
-      .map((l) => ({ kolom: l.kolom, carry: l.carryBaru! }));
+      .map((l) => ({
+        kolom: l.kolom + 1,
+        carry: l.carryBaru!,
+        barisPerkalianIdx: l.barisPerkalianIdx,
+      }));
   }, [perhitungan, langkahSekarang]);
 
   const borrowVisible = useMemo(() => {
-    if (!perhitungan || langkahSekarang < 0) return [];
-    return perhitungan.langkahLangkah
-      .slice(0, langkahSekarang + 1)
-      .filter((l) => l.borrow === true)
-      .map((l) => ({
-        kolom: l.kolom,
-        nilaiSebelum: l.nilaiSebelumBorrow ?? l.nilaiDigit1,
-        nilaiSesudah: l.nilaiSetelahBorrow ?? l.nilaiDigit1 + 10,
-      }));
+    if (!perhitungan || langkahSekarang < 0 || perhitungan.operasi !== 'pengurangan') return [];
+    
+    const langkah = perhitungan.langkahLangkah[langkahSekarang];
+    if (!langkah || !langkah.digitAtasAktif) return [];
+    
+    const digitsA = getDigits(perhitungan.angka1);
+    const maxLen = langkah.digitAtasAktif.length;
+    const paddedA = padDigits(digitsA, maxLen);
+    
+    // Cari kolom maksimum yang sudah diproses secara visual hingga langkah saat ini
+    let maxKolomTerproses = -1;
+    for (let idx = 0; idx <= langkahSekarang; idx++) {
+      const l = perhitungan.langkahLangkah[idx];
+      if (l && l.kolom !== -1) {
+        maxKolomTerproses = Math.max(maxKolomTerproses, l.kolom);
+      }
+    }
+    
+    const listBorrow: { kolom: number; nilaiSebelum: number; nilaiSesudah: number }[] = [];
+    for (let col = 0; col < maxLen; col++) {
+      // Perubahan borrow hanya ditampilkan jika kolom tersebut sudah mulai diproses/dilewati
+      if (col > maxKolomTerproses) continue;
+      
+      const nilaiAsli = paddedA[col];
+      const nilaiAktif = langkah.digitAtasAktif[col];
+      if (nilaiAktif !== nilaiAsli) {
+        listBorrow.push({
+          kolom: col,
+          nilaiSebelum: nilaiAsli,
+          nilaiSesudah: nilaiAktif,
+        });
+      }
+    }
+    return listBorrow;
   }, [perhitungan, langkahSekarang]);
 
   const penjelasan = langkahAktif?.penjelasan ?? 'Siap memulai...';
@@ -131,10 +163,11 @@ export function useAnimasi(): UseAnimasiReturn {
     }
   }, [langkahSekarang, totalLangkah]);
 
-  const setSoal = useCallback((a: number, b: number, op: Operasi) => {
+  const setSoal = useCallback((a: number, b: number, op: Operasi, ks?: Kesulitan) => {
     setAngka1(a);
     setAngka2(b);
     setOperasi(op);
+    if (ks) setKesulitan(ks);
     setLangkahSekarang(-1);
     setIsPlaying(false);
   }, []);

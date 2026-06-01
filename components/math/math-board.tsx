@@ -25,17 +25,25 @@ interface MathBoardProps {
   /** Callback saat siswa mengisi jawaban di kolom tertentu */
   onJawaban?: (kolom: number, nilai: number) => void;
   /** Callback saat siswa mengisi jawaban simpanan di kolom tertentu */
-  onCarryJawaban?: (kolom: number, nilai: number) => void;
+  onCarryJawaban?: (kolom: number, nilai: number, barisIdx?: number) => void;
   /** State per kolom jawaban (mode latihan) */
   jawabanState?: { nilai: number | null; state: InputBoxState }[];
   /** State per kolom simpanan (mode latihan) */
   carryJawabanState?: { nilai: number | null; state: InputBoxState }[];
+  /** State per kolom simpanan untuk perkalian parsial (mode latihan) */
+  barisPerkalianCarryJawaban?: { nilai: number | null; state: InputBoxState }[][];
   /** Langkah animasi yang aktif (mode animasi) */
   langkahAktif?: number;
   /** Carry values yang visible per kolom */
-  carryVisible?: { kolom: number; carry: number }[];
+  carryVisible?: { kolom: number; carry: number; barisPerkalianIdx?: number }[];
   /** Borrow values yang visible per kolom */
   borrowVisible?: { kolom: number; nilaiSebelum: number; nilaiSesudah: number }[];
+  /** Override perhitungan (misal: enriched untuk mode belajar) */
+  perhitunganOverride?: HasilPerhitungan;
+  /** State jawaban hasil parsial perkalian (mode latihan) */
+  barisPerkalianJawaban?: { nilai: number | null; state: InputBoxState }[][];
+  /** Callback saat siswa mengisi jawaban hasil parsial perkalian */
+  onParsialJawaban?: (barisIdx: number, kolom: number, nilai: number) => void;
 }
 
 export default function MathBoard({
@@ -50,14 +58,19 @@ export default function MathBoard({
   langkahAktif,
   carryVisible = [],
   borrowVisible = [],
+  perhitunganOverride,
+  barisPerkalianJawaban,
+  barisPerkalianCarryJawaban,
+  onParsialJawaban,
 }: MathBoardProps) {
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // Hitung hasil menggunakan math engine
-  const perhitungan: HasilPerhitungan = useMemo(
+  // Hitung hasil menggunakan math engine (atau gunakan override jika ada)
+  const perhitunganRaw: HasilPerhitungan = useMemo(
     () => solve(angka1, angka2, operasi),
     [angka1, angka2, operasi]
   );
+  const perhitungan = perhitunganOverride ?? perhitunganRaw;
 
   // Pecah angka jadi digit
   const digits1 = useMemo(() => getDigits(angka1), [angka1]);
@@ -95,15 +108,213 @@ export default function MathBoard({
   // Simbol operasi
   const simbol = OPERASI_SIMBOL[operasi];
 
-  // Cari carry/borrow untuk kolom tertentu
-  const getCarryForKolom = (kolom: number) =>
-    carryVisible.find((c) => c.kolom === kolom);
-  const getBorrowForKolom = (kolom: number) =>
-    borrowVisible.find((b) => b.kolom === kolom);
-
   // Render baris perkalian (jika perkalian)
   const isPerkalian = operasi === 'perkalian';
   const barisPerkalian = perhitungan.barisPerkalian;
+
+  // Menentukan baris perkalian parsial aktif pada mode latihan
+  const barisLatihanAktifIdx = useMemo(() => {
+    if (mode !== 'latihan' || !barisPerkalianJawaban) return 0;
+    const idx = barisPerkalianJawaban.findIndex(
+      (row) => !row.every((col) => col?.state === 'correct')
+    );
+    return idx === -1 ? 0 : idx;
+  }, [mode, barisPerkalianJawaban]);
+
+  // Cek apakah baris parsial perkalian ke-bIdx sudah selesai sepenuhnya dan benar
+  const isBarisParsialSelesai = useCallback((bIdx: number): boolean => {
+    if (!barisPerkalianJawaban || !barisPerkalianJawaban[bIdx]) return true;
+    return barisPerkalianJawaban[bIdx].every((colState) => colState?.state === 'correct');
+  }, [barisPerkalianJawaban]);
+
+  // Cek apakah digit parsial perkalian ke-bIdx pada kolom col harus di-disable
+  const isParsialDigitDisabled = useCallback((bIdx: number, col: number): boolean => {
+    if (mode !== 'latihan') return false;
+
+    // Jika baris sebelumnya belum selesai semua, baris ini disabled
+    for (let b = 0; b < bIdx; b++) {
+      if (!isBarisParsialSelesai(b)) return true;
+    }
+
+    // Kolom di sebelah kanan (k < col) pada baris yang sama harus selesai dengan benar
+    const rowState = barisPerkalianJawaban?.[bIdx];
+    if (!rowState) return false;
+    for (let k = 0; k < col; k++) {
+      if (rowState[k]?.state !== 'correct') return true;
+    }
+
+    // Jika ada carry yang ditargetkan ke kolom 'col' pada baris ini,
+    // maka digit di kolom 'col' ini di-disable sampai carry tersebut diisi dengan benar!
+    const baris = barisPerkalian?.[bIdx];
+    if (baris) {
+      const kolomGlobal = col + baris.offset;
+      const adaCarryUntukKolomIni = carryVisible.some(
+        (c) => c.kolom === kolomGlobal && c.barisPerkalianIdx === bIdx
+      );
+      if (adaCarryUntukKolomIni) {
+        const carryState = barisPerkalianCarryJawaban?.[bIdx]?.[kolomGlobal];
+        if (carryState?.state !== 'correct') return true;
+      }
+    }
+
+    return false;
+  }, [mode, isBarisParsialSelesai, barisPerkalianJawaban, barisPerkalian, carryVisible, barisPerkalianCarryJawaban]);
+
+  // Pindah focus ke digit parsial berikutnya
+  const focusNextParsial = useCallback((barisIdx: number, col: number) => {
+    if (!barisPerkalian || !barisPerkalianJawaban) return;
+
+    const baris = barisPerkalian[barisIdx];
+    const len = baris.langkahLangkah.length;
+
+    // Cari kolom berikutnya di baris yang sama (ke kiri = col + 1)
+    if (col + 1 < len) {
+      const nextCol = col + 1;
+      const kolomGlobal = nextCol + baris.offset;
+      const adaCarryBerikutnya = carryVisible.some(
+        (c) => c.kolom === kolomGlobal && c.barisPerkalianIdx === barisIdx
+      );
+      if (adaCarryBerikutnya) {
+        const carryState = barisPerkalianCarryJawaban?.[barisIdx]?.[kolomGlobal];
+        if (carryState?.state !== 'correct') {
+          const carryInput = document.getElementById(`carry-kolom-${kolomGlobal}`);
+          if (carryInput) {
+            carryInput.focus();
+            return;
+          }
+        }
+      }
+
+      const nextInput = document.getElementById(`input-parsial-${barisIdx}-${nextCol}`);
+      if (nextInput) {
+        (nextInput as HTMLInputElement).focus();
+        return;
+      }
+    }
+
+    // Jika baris yang sama sudah habis (sudah mencapai kolom paling kiri dari baris tersebut)
+    // Pindah ke baris parsial berikutnya (barisIdx + 1) pada kolom paling kanan (col = 0)
+    if (barisIdx + 1 < barisPerkalian.length) {
+      const nextInput = document.getElementById(`input-parsial-${barisIdx + 1}-0`);
+      if (nextInput) {
+        (nextInput as HTMLInputElement).focus();
+        return;
+      }
+    }
+
+    // Jika seluruh baris parsial sudah selesai, pindah ke input hasil akhir kolom 0
+    const finalInput = document.getElementById(`input-kolom-0`);
+    if (finalInput) {
+      (finalInput as HTMLInputElement).focus();
+    }
+  }, [barisPerkalian, barisPerkalianJawaban, carryVisible, barisPerkalianCarryJawaban]);
+
+  // Cari carry/borrow untuk kolom tertentu
+  const getCarryForKolom = (kolom: number) => {
+    if (mode === 'latihan' && operasi === 'perkalian') {
+      const semuaParsialSelesai = barisPerkalianJawaban?.every(
+        (row) => row.every((colState) => colState?.state === 'correct')
+      );
+      if (semuaParsialSelesai) {
+        return carryVisible.find(
+          (c) => c.kolom === kolom && c.barisPerkalianIdx === undefined
+        );
+      }
+      return carryVisible.find(
+        (c) => c.kolom === kolom && c.barisPerkalianIdx === barisLatihanAktifIdx
+      );
+    }
+    if (langkahAktif === undefined) {
+      return carryVisible.find((c) => c.kolom === kolom);
+    }
+    const langkah = perhitungan.langkahLangkah[langkahAktif];
+    const activeBarisIdx = langkah?.barisPerkalianIdx;
+
+    return carryVisible.find(
+      (c) => c.kolom === kolom && c.barisPerkalianIdx === activeBarisIdx
+    );
+  };
+  const getBorrowForKolom = (kolom: number) =>
+    borrowVisible.find((b) => b.kolom === kolom);
+
+  // Cek apakah kolom k sudah selesai dengan benar (jawaban utama + carry tujuan)
+  const isKolomSelesai = useCallback((k: number): boolean => {
+    const jawabanBenar = jawabanState?.[k]?.state === 'correct';
+    if (!jawabanBenar) return false;
+
+    const carryTujuan = k + 1;
+    // Jika perkalian, hanya cek carry hasil akhir (yang barisPerkalianIdx === undefined)
+    const adaCarry = carryVisible.some(
+      (c) => c.kolom === carryTujuan && (operasi !== 'perkalian' || c.barisPerkalianIdx === undefined)
+    );
+    if (adaCarry) {
+      const carryBenar = carryJawabanState?.[carryTujuan]?.state === 'correct';
+      if (!carryBenar) return false;
+    }
+
+    return true;
+  }, [jawabanState, carryJawabanState, carryVisible, operasi]);
+
+  // Cek apakah jawaban di kolom ini harus di-disable
+  const isJawabanDisabled = useCallback((kolom: number): boolean => {
+    if (mode !== 'latihan') return false;
+
+    // Untuk perkalian bertingkat, hasil akhir di bawah baru boleh diisi jika semua baris parsial selesai
+    if (operasi === 'perkalian' && barisPerkalian && barisPerkalian.length > 1) {
+      for (let b = 0; b < barisPerkalian.length; b++) {
+        if (!isBarisParsialSelesai(b)) return true;
+      }
+    }
+
+    // Kolom satuan (paling kanan) tidak pernah di-disable jika prasyarat di atas terpenuhi
+    if (kolom === 0) return false;
+    // Semua kolom di sebelah kanan (k < kolom) harus selesai
+    for (let k = 0; k < kolom; k++) {
+      if (!isKolomSelesai(k)) return true;
+    }
+    return false;
+  }, [mode, operasi, barisPerkalian, isBarisParsialSelesai, isKolomSelesai]);
+
+  // Cek apakah carry di kolom ini harus di-disable
+  const isCarryDisabled = useCallback((kolom: number): boolean => {
+    if (mode !== 'latihan') return false;
+
+    if (operasi === 'perkalian') {
+      if (kolom <= 1) return false;
+      const rowState = barisPerkalianJawaban?.[barisLatihanAktifIdx];
+      if (!rowState) return false;
+      // Cek apakah digit perkalian parsial kolom - 1 di baris aktif sudah diisi benar
+      for (let k = 0; k < kolom - 1; k++) {
+        if (rowState[k]?.state !== 'correct') return true;
+      }
+      return false;
+    }
+
+    // Carry kolom 1 (puluhan, dihasilkan dari satuan) tidak pernah di-disable
+    if (kolom <= 1) return false;
+    // Semua kolom sebelum kolom - 1 harus selesai
+    for (let k = 0; k < kolom - 1; k++) {
+      if (!isKolomSelesai(k)) return true;
+    }
+    return false;
+  }, [mode, operasi, barisLatihanAktifIdx, barisPerkalianJawaban, isKolomSelesai]);
+
+  // Cek highlight per baris pada langkah aktif
+  const getHighlightForBaris = (baris: 1 | 2, kolom: number): boolean => {
+    if (langkahAktif === undefined) return false;
+    const langkah = perhitungan.langkahLangkah[langkahAktif];
+    if (!langkah) return false;
+    // Jika ada penentuan highlight spesifik per baris, gunakan itu secara mutlak
+    if (baris === 1 && langkah.highlightBaris1 !== undefined) {
+      return langkah.highlightBaris1.includes(kolom);
+    }
+    if (baris === 2 && langkah.highlightBaris2 !== undefined) {
+      return langkah.highlightBaris2.includes(kolom);
+    }
+    // Cek kolom utama (berlaku untuk kedua baris sebagai fallback)
+    if (langkah.kolom === kolom) return true;
+    return false;
+  };
 
   return (
     <motion.div
@@ -122,7 +333,30 @@ export default function MathBoard({
           const kolom = maxKolom - 1 - i;
           const carry = getCarryForKolom(kolom);
           const borrow = getBorrowForKolom(kolom);
-          const cState = carryJawabanState?.[kolom];
+          const semuaParsialSelesai = mode === 'latihan' && operasi === 'perkalian' && barisPerkalianJawaban?.every(
+            (row) => row.every((colState) => colState?.state === 'correct')
+          );
+          const cState = mode === 'latihan' && operasi === 'perkalian'
+            ? (semuaParsialSelesai ? carryJawabanState?.[kolom] : barisPerkalianCarryJawaban?.[barisLatihanAktifIdx]?.[kolom])
+            : carryJawabanState?.[kolom];
+          const isCarryActive = (() => {
+            if (langkahAktif === undefined) return false;
+            if (langkahAktif === perhitungan.langkahLangkah.length - 1) return false;
+            const langkah = perhitungan.langkahLangkah[langkahAktif];
+            if (!langkah) return false;
+
+            const isNewlyGenerated =
+              langkah.kolom === kolom - 1 &&
+              langkah.carryBaru !== undefined &&
+              langkah.carryBaru > 0;
+
+            const isBeingUsed =
+              langkah.kolom === kolom &&
+              langkah.carry !== undefined &&
+              langkah.carry > 0;
+
+            return isNewlyGenerated || isBeingUsed;
+          })();
 
           return (
             <div key={`indicator-${kolom}`} className="math-digit relative flex justify-center items-end" style={{ height: '2rem' }}>
@@ -133,21 +367,32 @@ export default function MathBoard({
                       id={`carry-kolom-${kolom}`}
                       state={cState?.state ?? 'idle'}
                       nilai={cState?.nilai ?? null}
-                      onChange={(nilai) => onCarryJawaban?.(kolom, nilai)}
+                      onChange={(nilai) => {
+                        onCarryJawaban?.(
+                          kolom,
+                          nilai,
+                          (operasi === 'perkalian' && !semuaParsialSelesai) ? barisLatihanAktifIdx : undefined
+                        );
+                      }}
+                      disabled={isCarryDisabled(kolom)}
                       onFocusNext={() => {
-                        const nextInput = document.getElementById(`input-kolom-${kolom}`);
+                        const inputId = operasi === 'perkalian' && !semuaParsialSelesai
+                          ? `input-parsial-${barisLatihanAktifIdx}-${kolom}`
+                          : `input-kolom-${kolom}`;
+                        const nextInput = document.getElementById(inputId);
                         if (nextInput) (nextInput as HTMLInputElement).focus();
                       }}
                     />
                   </div>
                 ) : (
-                  <CarryIndicator nilai={carry.carry} />
+                  <CarryIndicator nilai={carry.carry} isNew={isCarryActive} />
                 )
               )}
               {borrow && (
                 <BorrowIndicator
                   nilaiAsli={borrow.nilaiSebelum}
                   nilaiBaru={borrow.nilaiSesudah}
+                  onlyNewValue={true}
                 />
               )}
             </div>
@@ -165,19 +410,25 @@ export default function MathBoard({
           const kolom = maxKolom - 1 - i;
           const digit = padded1[kolom];
           const isLeading = kolom >= digits1.length;
+          const borrow = getBorrowForKolom(kolom);
 
           return (
             <motion.div
               key={`d1-${kolom}`}
               className="math-digit"
               animate={
-                langkahAktif !== undefined &&
-                perhitungan.langkahLangkah[langkahAktif]?.kolom === kolom
-                  ? { backgroundColor: 'oklch(0.93 0.04 260)' }
-                  : {}
+                getHighlightForBaris(1, kolom)
+                  ? { backgroundColor: 'hsla(249, 47%, 90%, 1)' }
+                  : { backgroundColor: 'hsla(249, 47%, 90%, 0)' }
               }
             >
-              {!isLeading && digit}
+              {!isLeading && (
+                borrow ? (
+                  <span className="borrow-strikethrough text-muted-foreground opacity-60">{digit}</span>
+                ) : (
+                  digit
+                )
+              )}
             </motion.div>
           );
         })}
@@ -201,10 +452,9 @@ export default function MathBoard({
               key={`d2-${kolom}`}
               className="math-digit"
               animate={
-                langkahAktif !== undefined &&
-                perhitungan.langkahLangkah[langkahAktif]?.kolom === kolom
-                  ? { backgroundColor: 'oklch(0.93 0.04 260)' }
-                  : {}
+                getHighlightForBaris(2, kolom)
+                  ? { backgroundColor: 'hsla(249, 47%, 90%, 1)' }
+                  : { backgroundColor: 'hsla(249, 47%, 90%, 0)' }
               }
             >
               {!isLeading && digit}
@@ -221,43 +471,115 @@ export default function MathBoard({
       {/* ============================================
           PERKALIAN: Baris-baris Hasil Parsial
           ============================================ */}
-      {isPerkalian && barisPerkalian && barisPerkalian.length > 1 && (
-        <>
-          {barisPerkalian.map((baris, barisIdx) => {
-            const digitsBaris = getDigits(baris.hasilParsial);
-            const totalWidth = digitsBaris.length + baris.offset;
+      {isPerkalian && barisPerkalian && barisPerkalian.length > 1 && (() => {
+        // Cari barisAktifMaks
+        const barisAktifMaks = barisPerkalian.reduce((max, _, idx) => {
+          const aktif = mode !== 'animasi' ||
+            (langkahAktif !== undefined &&
+              perhitungan.langkahLangkah
+                .slice(0, langkahAktif + 1)
+                .some(
+                  (l) =>
+                    l.barisPerkalianIdx === idx ||
+                    (l.barisPerkalianIdx === undefined && l.kolom !== -1)
+                ));
+          return aktif ? idx : max;
+        }, -1);
 
-            return (
-              <div key={`baris-${barisIdx}`} className="flex gap-0.5 justify-end items-center">
-                <div className="w-8" />
-                {/* Padding kiri agar rata kanan */}
-                {[...Array(Math.max(0, maxKolom - totalWidth))].map((_, i) => (
-                  <div key={`pad-${i}`} className="math-digit" />
-                ))}
-                {/* Digit hasil parsial (reversed untuk display) */}
-                {[...digitsBaris].reverse().map((d, i) => (
-                  <motion.div
-                    key={`baris-${barisIdx}-digit-${i}`}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: barisIdx * 0.3 + i * 0.05 }}
-                    className="math-digit"
-                  >
-                    {d}
-                  </motion.div>
-                ))}
-                {/* Offset placeholders */}
-                {baris.offset > 0 && (
-                  <OffsetIndicator offset={baris.offset} baris={barisIdx} />
-                )}
-              </div>
-            );
-          })}
+        return (
+          <>
+            {barisPerkalian.map((baris, barisIdx) => {
+              const digitsBaris = baris.langkahLangkah.map((l) => l.hasil);
+              const totalWidth = digitsBaris.length + baris.offset;
 
-          {/* Garis pemisah kedua (sebelum hasil akhir) */}
-          <div className="math-separator my-1" />
-        </>
-      )}
+              const isBarisAktif = barisIdx <= barisAktifMaks;
+              if (!isBarisAktif) return null;
+
+              return (
+                <div key={`baris-${barisIdx}`} className="flex gap-0.5 justify-end items-center">
+                  <div className="w-8 flex items-center justify-center font-bold text-lg text-muted-foreground">
+                    {barisIdx === barisAktifMaks ? '+' : ''}
+                  </div>
+                  {/* Padding kiri agar rata kanan */}
+                  {[...Array(Math.max(0, maxKolom - totalWidth))].map((_, i) => (
+                    <div key={`pad-${i}`} className="math-digit" />
+                  ))}
+                  {/* Digit hasil parsial (reversed untuk display) */}
+                  {[...digitsBaris].reverse().map((d, i) => {
+                    const c = digitsBaris.length - 1 - i;
+                    
+                    if (mode === 'latihan' && barisPerkalianJawaban) {
+                      const digitState = barisPerkalianJawaban[barisIdx]?.[c];
+                      return (
+                        <InputBox
+                          key={`baris-${barisIdx}-input-${c}`}
+                          id={`input-parsial-${barisIdx}-${c}`}
+                          state={digitState?.state ?? 'idle'}
+                          nilai={digitState?.nilai ?? null}
+                          onChange={(nilai) => onParsialJawaban?.(barisIdx, c, nilai)}
+                          disabled={isParsialDigitDisabled(barisIdx, c)}
+                          onFocusNext={() => focusNextParsial(barisIdx, c)}
+                          autoFocus={barisIdx === 0 && c === 0 && !digitState?.nilai}
+                        />
+                      );
+                    }
+
+                    const isDigitRevealed =
+                      mode !== 'animasi' ||
+                      (langkahAktif !== undefined &&
+                        perhitungan.langkahLangkah
+                          .slice(0, langkahAktif + 1)
+                          .some(
+                            (l) =>
+                              (l.barisPerkalianIdx === barisIdx && l.kolom === c) ||
+                              (l.barisPerkalianIdx === undefined && l.kolom !== -1)
+                          ));
+
+                    const langkah = langkahAktif !== undefined ? perhitungan.langkahLangkah[langkahAktif] : null;
+                    const isPenjumlahanParsial =
+                      langkah &&
+                      operasi === 'perkalian' &&
+                      langkah.barisPerkalianIdx === undefined &&
+                      langkah.kolom !== -1;
+                    
+                    const isDigitHighlighted =
+                      isPenjumlahanParsial && langkah && langkah.kolom === c + baris.offset;
+
+                    const isBarisSedangDihitung =
+                      langkah && langkah.barisPerkalianIdx === barisIdx;
+
+                    return (
+                      <motion.div
+                        key={`baris-${barisIdx}-digit-${i}`}
+                        initial={{ opacity: 0 }}
+                        animate={
+                          isDigitHighlighted
+                            ? { opacity: 1, backgroundColor: 'hsla(249, 47%, 90%, 1)' }
+                            : { opacity: 1, backgroundColor: 'hsla(249, 47%, 90%, 0)' }
+                        }
+                        transition={{ duration: 0.2 }}
+                        className="math-digit"
+                        style={{
+                          color: isBarisSedangDihitung ? 'var(--primary)' : 'inherit',
+                        }}
+                      >
+                        {isDigitRevealed ? d : ''}
+                      </motion.div>
+                    );
+                  })}
+                  {/* Offset placeholders */}
+                  {baris.offset > 0 && (
+                    <OffsetIndicator offset={baris.offset} baris={barisIdx} />
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Garis pemisah kedua (sebelum hasil akhir) */}
+            <div className="math-separator my-1" />
+          </>
+        );
+      })()}
 
       {/* ============================================
           Baris Hasil / Input Jawaban
@@ -292,7 +614,11 @@ export default function MathBoard({
                 langkahAktif !== undefined &&
                 perhitungan.langkahLangkah
                   .slice(0, langkahAktif + 1)
-                  .some((l) => l.kolom === kolom);
+                  .some((l) =>
+                    operasi === 'perkalian'
+                      ? l.barisPerkalianIdx === undefined && l.kolom === kolom
+                      : l.kolom === kolom
+                  );
 
               return (
                 <motion.div
@@ -317,6 +643,7 @@ export default function MathBoard({
                 state={kolomState?.state ?? 'idle'}
                 nilai={kolomState?.nilai ?? null}
                 onChange={(nilai) => onJawaban?.(kolom, nilai)}
+                disabled={isJawabanDisabled(kolom)}
                 onFocusNext={() => {
                   // Cari kolom berikutnya yang belum terjawab (ke kiri = index lebih besar)
                   for (let next = kolom + 1; next < maxKolom; next++) {
@@ -341,7 +668,7 @@ export default function MathBoard({
                     }
                   }
                 }}
-                autoFocus={kolom === 0 && !kolomState?.nilai}
+                autoFocus={kolom === 0 && !kolomState?.nilai && !isPerkalian}
               />
             );
           })}
